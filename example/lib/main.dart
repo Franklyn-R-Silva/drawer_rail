@@ -256,22 +256,35 @@ class _HomePageState extends State<HomePage> {
     );
 
     final content = Expanded(
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(_title, style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 24),
-            FilledButton.tonalIcon(
-              onPressed: () => setState(() => _customRight = !_customRight),
-              icon: const Icon(Icons.swap_horiz_rounded),
-              label: Text(
-                _customRight
-                    ? 'Default drawer (left)'
-                    : 'Custom drawer (right)',
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
-            ),
-          ],
+              const SizedBox(height: 24),
+              // Scale the button down if the content area is too narrow (e.g.
+              // on a phone where the expanded drawer leaves little room), so it
+              // never overflows.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: FilledButton.tonalIcon(
+                  onPressed: () => setState(() => _customRight = !_customRight),
+                  icon: const Icon(Icons.swap_horiz_rounded),
+                  label: Text(
+                    _customRight
+                        ? 'Default drawer (left)'
+                        : 'Custom drawer (right)',
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

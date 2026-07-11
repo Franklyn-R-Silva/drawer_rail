@@ -14,3 +14,13 @@ pubspec.lock
 
 # macOS
 .DS_Store
+
+# Generated example runners (regenerate with `flutter create --platforms=... .`)
+# The lightweight web runner is kept so the example runs in a browser.
+example/windows/
+example/linux/
+example/macos/
+example/android/
+example/ios/
+example/.metadata
+screenshots/*.tmp.*
