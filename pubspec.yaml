@@ -1,0 +1,28 @@
+name: drawer_rail
+description: >-
+  A collapsible, themeable side navigation drawer with a full-width panel and a
+  narrow icon rail: search, sections, badges, expandable groups and flyouts.
+version: 0.1.0
+repository: https://github.com/Franklyn-R-Silva/drawer_rail
+issue_tracker: https://github.com/Franklyn-R-Silva/drawer_rail/issues
+topics:
+  - drawer
+  - navigation
+  - sidebar
+  - ui
+  - widget
+
+environment:
+  sdk: ^3.5.0
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
