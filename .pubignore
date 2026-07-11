@@ -1,0 +1,34 @@
+# NOTE: when a .pubignore exists it REPLACES .gitignore for publishing, so this
+# file must list everything that should be kept out of the published archive.
+
+# Dart / Flutter build & tooling
+.dart_tool/
+.pub-cache/
+.pub/
+build/
+pubspec.lock
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.log
+
+# OS
+.DS_Store
+
+# Media — referenced in the README via absolute raw GitHub URLs, so it does
+# not need to ship inside the package archive.
+screenshots/
+
+# Example: keep only the source (lib/, test/, pubspec, README); drop generated
+# platform runners and build output.
+example/.dart_tool/
+example/build/
+example/.metadata
+example/android/
+example/ios/
+example/linux/
+example/macos/
+example/windows/
+example/web/

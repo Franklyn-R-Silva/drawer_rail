@@ -7,8 +7,21 @@
 [![pub package](https://img.shields.io/pub/v/drawer_rail.svg)](https://pub.dev/packages/drawer_rail)
 -->
 
-
 A collapsible, themeable **side navigation drawer** for Flutter.
+
+<p align="center">
+  <img
+    src="https://raw.githubusercontent.com/Franklyn-R-Silva/drawer_rail/main/screenshots/drawer_rail.gif"
+    alt="drawer_rail demo — collapsing rail, flyout groups, search and dark mode"
+    width="300"
+  />
+  <br /><br />
+  <img
+    src="https://raw.githubusercontent.com/Franklyn-R-Silva/drawer_rail/main/screenshots/drawer_rail.png"
+    alt="drawer_rail expanded panel on a wide screen"
+    width="720"
+  />
+</p>
 
 `DrawerRail` has two states, both driven by your app's `ColorScheme`:
 
