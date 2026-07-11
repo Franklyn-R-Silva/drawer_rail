@@ -148,7 +148,8 @@ class _DrawerRailState extends State<DrawerRail> {
           decoration: BoxDecoration(
             color: theme.backgroundColor,
             borderRadius: BorderRadius.horizontal(
-                right: Radius.circular(theme.borderRadius)),
+              right: Radius.circular(theme.borderRadius),
+            ),
             boxShadow: theme.shadow,
           ),
           // Lay content out at its natural width regardless of the animating
@@ -596,7 +597,9 @@ class _RailButton extends StatelessWidget {
                             : theme.selectedColor,
                         shape: BoxShape.circle,
                         border: Border.all(
-                            color: theme.backgroundColor, width: 1.5),
+                          color: theme.backgroundColor,
+                          width: 1.5,
+                        ),
                       ),
                     ),
                   ),
