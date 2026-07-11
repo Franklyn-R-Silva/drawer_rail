@@ -60,8 +60,10 @@ class DrawerRail extends StatefulWidget {
     this.labels = const DrawerRailLabels(),
     this.showSearch = true,
     this.showCollapseButton = true,
+    this.showFooterDivider = true,
     this.headerBuilder,
     this.footerBuilder,
+    this.searchDecoration,
   });
 
   /// Holds and mutates the drawer's runtime state. Must be kept alive by the
@@ -85,6 +87,9 @@ class DrawerRail extends StatefulWidget {
   /// Whether to show the built-in collapse/expand toggle button.
   final bool showCollapseButton;
 
+  /// Whether to draw a divider above the footer. Defaults to `true`.
+  final bool showFooterDivider;
+
   /// Optional content shown above the search field (for example a user
   /// profile). Rebuilt whenever the collapsed state changes.
   final DrawerRailSlotBuilder? headerBuilder;
@@ -92,6 +97,12 @@ class DrawerRail extends StatefulWidget {
   /// Optional content shown below the menu, separated by a divider (for example
   /// a dark-mode toggle or a sign-out button).
   final DrawerRailSlotBuilder? footerBuilder;
+
+  /// Overrides the decoration of the built-in search field. When null, a
+  /// filled, rounded field derived from the theme is used. The controller's
+  /// hint and clear button are applied on top, so you rarely need to set the
+  /// hint or suffix here.
+  final InputDecoration? searchDecoration;
 
   @override
   State<DrawerRail> createState() => _DrawerRailState();
@@ -147,9 +158,13 @@ class _DrawerRailState extends State<DrawerRail> {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: theme.backgroundColor,
-            borderRadius: BorderRadius.horizontal(
-              right: Radius.circular(theme.borderRadius),
-            ),
+            borderRadius: theme.position == DrawerRailPosition.right
+                ? BorderRadius.horizontal(
+                    left: Radius.circular(theme.borderRadius),
+                  )
+                : BorderRadius.horizontal(
+                    right: Radius.circular(theme.borderRadius),
+                  ),
             boxShadow: theme.shadow,
           ),
           // Lay content out at its natural width regardless of the animating
@@ -169,7 +184,7 @@ class _DrawerRailState extends State<DrawerRail> {
                       if (widget.showSearch) _buildSearch(collapsed, theme),
                       Expanded(child: _buildMenu(collapsed, theme)),
                       if (widget.footerBuilder != null) ...[
-                        const Divider(height: 1),
+                        if (widget.showFooterDivider) const Divider(height: 1),
                         widget.footerBuilder!(context, collapsed),
                       ],
                     ],
@@ -201,7 +216,7 @@ class _DrawerRailState extends State<DrawerRail> {
             if (widget.showCollapseButton)
               IconButton(
                 tooltip: widget.labels.expandTooltip,
-                icon: const Icon(Icons.chevron_right_rounded),
+                icon: Icon(theme.expandIcon),
                 onPressed: () => _controller.setCollapsed(false),
               ),
           ],
@@ -217,7 +232,7 @@ class _DrawerRailState extends State<DrawerRail> {
           if (widget.showCollapseButton)
             IconButton(
               tooltip: widget.labels.collapseTooltip,
-              icon: const Icon(Icons.chevron_left_rounded),
+              icon: Icon(theme.collapseIcon),
               onPressed: () => _controller.setCollapsed(true),
             ),
         ],
@@ -233,7 +248,7 @@ class _DrawerRailState extends State<DrawerRail> {
         padding: const EdgeInsets.only(bottom: 4),
         child: IconButton(
           tooltip: widget.labels.searchTooltip,
-          icon: const Icon(Icons.search_rounded),
+          icon: Icon(theme.searchIcon),
           onPressed: () {
             _controller.setCollapsed(false);
             WidgetsBinding.instance
@@ -242,6 +257,17 @@ class _DrawerRailState extends State<DrawerRail> {
         ),
       );
     }
+    final base = widget.searchDecoration ??
+        InputDecoration(
+          isDense: true,
+          prefixIcon: Icon(theme.searchIcon, size: theme.iconSize),
+          filled: true,
+          fillColor: theme.searchFillColor,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(theme.itemBorderRadius),
+            borderSide: BorderSide.none,
+          ),
+        );
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: TextField(
@@ -249,25 +275,17 @@ class _DrawerRailState extends State<DrawerRail> {
         focusNode: _searchFocus,
         onChanged: (v) => setState(() => _query = v),
         textInputAction: TextInputAction.search,
-        decoration: InputDecoration(
-          isDense: true,
-          hintText: widget.labels.searchHint,
-          prefixIcon: const Icon(Icons.search_rounded, size: 20),
-          filled: true,
-          fillColor: theme.searchFillColor,
+        decoration: base.copyWith(
+          hintText: base.hintText ?? widget.labels.searchHint,
           suffixIcon: _query.isEmpty
-              ? null
+              ? base.suffixIcon
               : IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 18),
+                  icon: Icon(theme.clearSearchIcon, size: 18),
                   onPressed: () {
                     _searchController.clear();
                     setState(() => _query = '');
                   },
                 ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(theme.itemBorderRadius),
-            borderSide: BorderSide.none,
-          ),
         ),
       ),
     );
@@ -301,7 +319,7 @@ class _DrawerRailState extends State<DrawerRail> {
         );
       }
       return ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: theme.contentPadding,
         children: [
           for (final link in matches)
             _linkTile(link, selected == link.id, theme, indent: false),
@@ -310,7 +328,7 @@ class _DrawerRailState extends State<DrawerRail> {
     }
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: theme.contentPadding,
       children: [
         for (final e in widget.entries) _entry(e, collapsed, selected, theme),
       ],
@@ -332,13 +350,8 @@ class _DrawerRailState extends State<DrawerRail> {
           : Padding(
               padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
               child: Text(
-                label.toUpperCase(),
-                style: TextStyle(
-                  color: theme.sectionColor,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 11,
-                  letterSpacing: 1.0,
-                ),
+                theme.sectionUppercase ? label.toUpperCase() : label,
+                style: theme.sectionTextStyle,
               ),
             ),
       DrawerLink() => collapsed
@@ -360,27 +373,34 @@ class _DrawerRailState extends State<DrawerRail> {
   }) {
     final tint = link.danger ? theme.errorColor : theme.labelColor;
     final fg = isSelected ? theme.onSelectedColor : tint;
+    final baseStyle =
+        isSelected ? theme.selectedLabelTextStyle : theme.labelTextStyle;
     return Padding(
-      padding: EdgeInsets.only(bottom: 2, left: indent ? 24 : 0),
+      padding: EdgeInsets.only(
+        bottom: 2,
+        left: indent ? theme.groupChildIndent : 0,
+      ),
       child: AnimatedPressCard(
         onTap: () => _openLink(link),
+        pressedScale: theme.pressedScale,
+        hoverShadowColor: theme.hoverShadowColor,
         borderRadius: BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: theme.itemPadding,
           decoration: BoxDecoration(
             color: isSelected ? theme.selectedColor : Colors.transparent,
             borderRadius: BorderRadius.circular(theme.itemBorderRadius),
           ),
           child: Row(
             children: [
-              Icon(link.icon, size: 20, color: fg),
+              Icon(link.icon, size: theme.iconSize, color: fg),
               const SizedBox(width: 16),
               Expanded(
                 child: Text(
                   link.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontWeight: FontWeight.w600, color: fg),
+                  style: baseStyle.copyWith(color: fg),
                 ),
               ),
               if (link.badge != null) _badge(link.badge!, isSelected, theme),
@@ -403,21 +423,26 @@ class _DrawerRailState extends State<DrawerRail> {
           padding: const EdgeInsets.only(bottom: 2),
           child: AnimatedPressCard(
             onTap: () => _controller.toggleGroup(group.id),
+            pressedScale: theme.pressedScale,
+            hoverShadowColor: theme.hoverShadowColor,
             borderRadius:
                 BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: theme.itemPadding,
               child: Row(
                 children: [
-                  Icon(group.icon, size: 20, color: theme.iconColor),
+                  Icon(
+                    group.icon,
+                    size: theme.iconSize,
+                    color: theme.iconColor,
+                  ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Text(
                       group.label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
+                      style: theme.labelTextStyle.copyWith(
                         color: theme.labelColor,
                       ),
                     ),
@@ -425,9 +450,9 @@ class _DrawerRailState extends State<DrawerRail> {
                   if (group.badge != null) _badge(group.badge!, false, theme),
                   AnimatedRotation(
                     turns: open ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 200),
+                    duration: theme.groupAnimationDuration,
                     child: Icon(
-                      Icons.keyboard_arrow_down_rounded,
+                      theme.groupTrailingIcon,
                       color: theme.surfaceVariantColor,
                     ),
                   ),
@@ -446,7 +471,7 @@ class _DrawerRailState extends State<DrawerRail> {
           ),
           crossFadeState:
               open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-          duration: const Duration(milliseconds: 200),
+          duration: theme.groupAnimationDuration,
         ),
       ],
     );
@@ -489,7 +514,8 @@ class _DrawerRailState extends State<DrawerRail> {
       menuChildren: [
         for (final child in group.children)
           MenuItemButton(
-            leadingIcon: Icon(child.icon, size: 20, color: theme.iconColor),
+            leadingIcon:
+                Icon(child.icon, size: theme.iconSize, color: theme.iconColor),
             onPressed: () => _openLink(child),
             child: Text(child.label),
           ),
@@ -526,10 +552,7 @@ class _DrawerRailState extends State<DrawerRail> {
         color: bg,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        label,
-        style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w800),
-      ),
+      child: Text(label, style: theme.badgeTextStyle.copyWith(color: fg)),
     );
   }
 
@@ -572,10 +595,12 @@ class _RailButton extends StatelessWidget {
         message: tooltip,
         child: AnimatedPressCard(
           onTap: onTap,
+          pressedScale: theme.pressedScale,
+          hoverShadowColor: theme.hoverShadowColor,
           borderRadius:
               BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
           child: Container(
-            height: 44,
+            height: theme.railItemHeight,
             decoration: BoxDecoration(
               color: selected ? theme.selectedColor : Colors.transparent,
               borderRadius: BorderRadius.circular(theme.itemBorderRadius),
@@ -583,7 +608,7 @@ class _RailButton extends StatelessWidget {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                Icon(icon, size: 22, color: fg),
+                Icon(icon, size: theme.railIconSize, color: fg),
                 if (showDot)
                   Positioned(
                     top: 8,

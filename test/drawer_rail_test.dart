@@ -111,5 +111,43 @@ void main() {
       expect(find.text('Settings'), findsOneWidget);
       expect(find.text('Home'), findsNothing);
     });
+
+    testWidgets('applies custom theme icons and section casing',
+        (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: const DrawerRailTheme(
+              expandIcon: Icons.arrow_forward,
+              sectionUppercase: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Custom expand icon is used in the collapsed rail header.
+      expect(find.byIcon(Icons.arrow_forward), findsOneWidget);
+      expect(find.byIcon(Icons.chevron_right_rounded), findsNothing);
+    });
+
+    testWidgets('keeps original section casing when uppercase is off',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: const DrawerRailTheme(sectionUppercase: false),
+          ),
+        ),
+      );
+
+      expect(find.text('Main'), findsOneWidget);
+      expect(find.text('MAIN'), findsNothing);
+    });
   });
 }

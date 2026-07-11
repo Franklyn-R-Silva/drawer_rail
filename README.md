@@ -1,8 +1,12 @@
 # drawer_rail
 
 [![CI](https://github.com/Franklyn-R-Silva/drawer_rail/actions/workflows/ci.yaml/badge.svg)](https://github.com/Franklyn-R-Silva/drawer_rail/actions/workflows/ci.yaml)
-[![pub package](https://img.shields.io/pub/v/drawer_rail.svg)](https://pub.dev/packages/drawer_rail)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+<!-- After the first `flutter pub publish`, add the pub badge:
+[![pub package](https://img.shields.io/pub/v/drawer_rail.svg)](https://pub.dev/packages/drawer_rail)
+-->
+
 
 A collapsible, themeable **side navigation drawer** for Flutter.
 
@@ -159,19 +163,98 @@ controller.addListener(() {
 });
 ```
 
-## Theming
+## Theming — fully customizable
 
-Everything falls back to the ambient `ColorScheme`. Override only what you need:
+Everything falls back to the ambient `ColorScheme`, so the drawer looks right
+with zero configuration. When you want control, **every** size, spacing, color,
+text style, icon and animation is exposed on `DrawerRailTheme` — override only
+what you need:
 
 ```dart
 DrawerRail(
   controller: _controller,
   entries: _entries,
   theme: const DrawerRailTheme(
+    // Sizing & layout
     expandedWidth: 320,
     railWidth: 72,
     borderRadius: 28,
+    itemBorderRadius: 12,
+    iconSize: 22,
+    railIconSize: 24,
+    railItemHeight: 48,
+    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    itemPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    groupChildIndent: 28,
+    position: DrawerRailPosition.left, // or .right
+
+    // Colors
     selectedColor: Color(0xFF6366F1),
+    onSelectedColor: Colors.white,
+    iconColor: Color(0xFF334155),
+    labelColor: Color(0xFF0F172A),
+    sectionColor: Color(0xFF6366F1),
+    badgeCountColor: Color(0xFFEF4444),
+    hoverShadowColor: Color(0x1F6366F1),
+
+    // Text styles (label color is applied automatically per state)
+    labelTextStyle: TextStyle(fontWeight: FontWeight.w600),
+    sectionTextStyle: TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
+    badgeTextStyle: TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
+    sectionUppercase: true,
+
+    // Icons for the built-in chrome
+    collapseIcon: Icons.chevron_left_rounded,
+    expandIcon: Icons.chevron_right_rounded,
+    searchIcon: Icons.search_rounded,
+    clearSearchIcon: Icons.close_rounded,
+    groupTrailingIcon: Icons.keyboard_arrow_down_rounded,
+
+    // Animation
+    animationDuration: Duration(milliseconds: 240),
+    animationCurve: Curves.easeOutCubic,
+    groupAnimationDuration: Duration(milliseconds: 200),
+    pressedScale: 0.97,
+  ),
+);
+```
+
+### What each field controls
+
+| Group      | Fields |
+| ---------- | ------ |
+| **Sizing** | `expandedWidth`, `railWidth`, `railItemHeight`, `iconSize`, `railIconSize`, `borderRadius`, `itemBorderRadius` |
+| **Spacing**| `contentPadding`, `itemPadding`, `groupChildIndent` |
+| **Colors** | `backgroundColor`, `selectedColor`, `onSelectedColor`, `iconColor`, `labelColor`, `sectionColor`, `badgeTextColor`, `badgeCountColor`, `menuBackgroundColor`, `searchFillColor`, `hoverShadowColor`, `shadow` |
+| **Text**   | `labelTextStyle`, `selectedLabelTextStyle`, `sectionTextStyle`, `badgeTextStyle`, `sectionUppercase` |
+| **Icons**  | `collapseIcon`, `expandIcon`, `searchIcon`, `clearSearchIcon`, `groupTrailingIcon` |
+| **Motion** | `animationDuration`, `animationCurve`, `groupAnimationDuration`, `pressedScale` |
+| **Layout** | `position` (`left` / `right`) |
+
+### Widget-level customization
+
+Beyond the theme, `DrawerRail` itself exposes toggles and slots:
+
+| Field | Purpose |
+| ----- | ------- |
+| `showSearch` | Show/hide the built-in search. |
+| `showCollapseButton` | Show/hide the collapse/expand toggle. |
+| `showFooterDivider` | Draw a divider above the footer. |
+| `headerBuilder` / `footerBuilder` | Fully custom header/footer per state. |
+| `searchDecoration` | Replace the search field's `InputDecoration`. |
+| `labels` | Localize every built-in string (see below). |
+
+Full control of the search field:
+
+```dart
+DrawerRail(
+  controller: _controller,
+  entries: _entries,
+  searchDecoration: InputDecoration(
+    hintText: 'Type to filter…',
+    prefixIcon: const Icon(Icons.filter_list_rounded),
+    filled: true,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(30)),
   ),
 );
 ```

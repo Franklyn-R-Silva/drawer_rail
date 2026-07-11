@@ -2,7 +2,19 @@
 
 ## Unreleased
 
-<!-- Add your changes here under the next version. -->
+### Added
+
+- Full theming surface on `DrawerRailTheme`: `iconSize`, `railIconSize`,
+  `railItemHeight`, `pressedScale`, `sectionUppercase`, `contentPadding`,
+  `itemPadding`, `groupChildIndent`, `groupAnimationDuration`,
+  `hoverShadowColor`, `menuBackgroundColor`, `searchFillColor`.
+- Customizable text styles: `labelTextStyle`, `selectedLabelTextStyle`,
+  `sectionTextStyle`, `badgeTextStyle`.
+- Customizable chrome icons: `collapseIcon`, `expandIcon`, `searchIcon`,
+  `clearSearchIcon`, `groupTrailingIcon`.
+- `DrawerRailPosition` (`left` / `right`) to place the drawer on either side.
+- `DrawerRail.searchDecoration` to fully override the search field, and
+  `DrawerRail.showFooterDivider`.
 
 ## 0.1.0
 

@@ -13,6 +13,7 @@ class AnimatedPressCard extends StatefulWidget {
     this.onTap,
     this.borderRadius = const BorderRadius.all(Radius.circular(16)),
     this.pressedScale = 0.97,
+    this.hoverShadowColor,
   });
 
   /// The content of the card.
@@ -26,6 +27,10 @@ class AnimatedPressCard extends StatefulWidget {
 
   /// The scale factor applied while the card is pressed. Defaults to `0.97`.
   final double pressedScale;
+
+  /// The color of the soft shadow shown on hover. Defaults to a translucent
+  /// [ColorScheme.primary].
+  final Color? hoverShadowColor;
 
   @override
   State<AnimatedPressCard> createState() => _AnimatedPressCardState();
@@ -91,10 +96,11 @@ class _AnimatedPressCardState extends State<AnimatedPressCard>
                 boxShadow: _hovered && widget.onTap != null
                     ? [
                         BoxShadow(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withValues(alpha: 0.12),
+                          color: widget.hoverShadowColor ??
+                              Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.12),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
