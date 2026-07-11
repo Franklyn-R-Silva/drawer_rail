@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+<!-- Add your changes here under the next version. -->
+
 ## 0.1.0
 
 Initial release.

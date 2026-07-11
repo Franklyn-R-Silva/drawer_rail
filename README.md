@@ -1,5 +1,9 @@
 # drawer_rail
 
+[![CI](https://github.com/Franklyn-R-Silva/drawer_rail/actions/workflows/ci.yaml/badge.svg)](https://github.com/Franklyn-R-Silva/drawer_rail/actions/workflows/ci.yaml)
+[![pub package](https://img.shields.io/pub/v/drawer_rail.svg)](https://pub.dev/packages/drawer_rail)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A collapsible, themeable **side navigation drawer** for Flutter.
 
 `DrawerRail` has two states, both driven by your app's `ColorScheme`:
@@ -206,6 +210,15 @@ DrawerRail(
 
 A complete, runnable example lives in [`example/`](example/lib/main.dart),
 including a header logo, a dark-mode footer toggle, badges and a group.
+
+## Contributing
+
+Contributions are welcome from everyone! Fork the repo, create a branch, and
+open a pull request. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first and
+follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+Good first steps: open an issue for bugs or ideas, improve the docs, or add
+tests.
 
 ## License
 
