@@ -66,6 +66,9 @@ class _HomePageState extends State<HomePage> {
   final _controller = DrawerRailController(selectedId: 'dashboard');
   String _title = 'Dashboard';
 
+  /// Toggles between the default left drawer and a fully custom right one.
+  bool _customRight = false;
+
   @override
   void dispose() {
     _controller.dispose();
@@ -74,6 +77,35 @@ class _HomePageState extends State<HomePage> {
 
   /// Simulate navigation by just updating the content area title.
   void _go(String title) => setState(() => _title = title);
+
+  /// A fully customized theme placing the drawer on the right, with a green
+  /// accent, wider layout, custom chrome icons and non-uppercase sections.
+  static const _rightTheme = DrawerRailTheme(
+    position: DrawerRailPosition.right,
+    expandedWidth: 320,
+    railWidth: 84,
+    borderRadius: 32,
+    itemBorderRadius: 12,
+    railItemHeight: 48,
+    iconSize: 22,
+    railIconSize: 24,
+    pressedScale: 0.95,
+    sectionUppercase: false,
+    selectedColor: Color(0xFF10B981),
+    onSelectedColor: Colors.white,
+    sectionColor: Color(0xFF10B981),
+    badgeCountColor: Color(0xFFF43F5E),
+    sectionTextStyle: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+    labelTextStyle: TextStyle(fontWeight: FontWeight.w600),
+    // On a right-side drawer, flip the chevrons to point toward the edge.
+    collapseIcon: Icons.chevron_right_rounded,
+    expandIcon: Icons.chevron_left_rounded,
+    groupTrailingIcon: Icons.expand_more_rounded,
+    groupAnimationDuration: Duration(milliseconds: 260),
+  );
+
+  DrawerRailTheme get _theme =>
+      _customRight ? _rightTheme : const DrawerRailTheme();
 
   List<DrawerEntry> get _entries => [
         const DrawerSection('Main'),
@@ -146,92 +178,109 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      body: Row(
-        children: [
-          DrawerRail(
-            controller: _controller,
-            entries: _entries,
-            headerBuilder: (context, collapsed) {
-              final logo = CircleAvatar(
-                radius: 20,
-                backgroundColor: scheme.primary,
-                child: Text(
-                  'DR',
-                  style: TextStyle(
-                    color: scheme.onPrimary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              );
-              if (collapsed) return logo;
-              return Row(
-                children: [
-                  logo,
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'drawer_rail',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-            footerBuilder: (context, collapsed) {
-              if (collapsed) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: IconButton(
-                    tooltip: 'Dark mode',
-                    icon: Icon(
-                      widget.isDark
-                          ? Icons.dark_mode_rounded
-                          : Icons.light_mode_rounded,
-                    ),
-                    onPressed: widget.onToggleTheme,
-                  ),
-                );
-              }
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Icon(
-                      widget.isDark
-                          ? Icons.dark_mode_rounded
-                          : Icons.light_mode_rounded,
-                      size: 20,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 16),
-                    const Expanded(
-                      child: Text(
-                        'Dark mode',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                    Switch(
-                      value: widget.isDark,
-                      onChanged: (_) => widget.onToggleTheme(),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          Expanded(
-            child: Center(
-              child: Text(
-                _title,
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
+
+    final drawer = DrawerRail(
+      controller: _controller,
+      entries: _entries,
+      theme: _theme,
+      headerBuilder: (context, collapsed) {
+        final logo = CircleAvatar(
+          radius: 20,
+          backgroundColor: scheme.primary,
+          child: Text(
+            'DR',
+            style: TextStyle(
+              color: scheme.onPrimary,
+              fontWeight: FontWeight.w800,
             ),
           ),
-        ],
+        );
+        if (collapsed) return logo;
+        return Row(
+          children: [
+            logo,
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'drawer_rail',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+      footerBuilder: (context, collapsed) {
+        if (collapsed) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: IconButton(
+              tooltip: 'Dark mode',
+              icon: Icon(
+                widget.isDark
+                    ? Icons.dark_mode_rounded
+                    : Icons.light_mode_rounded,
+              ),
+              onPressed: widget.onToggleTheme,
+            ),
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Icon(
+                widget.isDark
+                    ? Icons.dark_mode_rounded
+                    : Icons.light_mode_rounded,
+                size: 20,
+                color: scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Text(
+                  'Dark mode',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              Switch(
+                value: widget.isDark,
+                onChanged: (_) => widget.onToggleTheme(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    final content = Expanded(
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_title, style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: 24),
+            FilledButton.tonalIcon(
+              onPressed: () => setState(() => _customRight = !_customRight),
+              icon: const Icon(Icons.swap_horiz_rounded),
+              label: Text(
+                _customRight
+                    ? 'Default drawer (left)'
+                    : 'Custom drawer (right)',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // Order the row so the drawer sits on the side its theme declares.
+    final onRight = _theme.position == DrawerRailPosition.right;
+    return Scaffold(
+      body: Row(
+        children: onRight ? [content, drawer] : [drawer, content],
       ),
     );
   }

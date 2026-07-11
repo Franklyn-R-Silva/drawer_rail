@@ -149,5 +149,59 @@ void main() {
       expect(find.text('Main'), findsOneWidget);
       expect(find.text('MAIN'), findsNothing);
     });
+
+    // Finds the drawer's own outer container: the one whose border radius has
+    // a single rounded side (the AnimatedPressCard containers round all sides).
+    BorderRadius drawerEdgeRadius(WidgetTester tester) {
+      for (final c in tester.widgetList<AnimatedContainer>(
+        find.byType(AnimatedContainer),
+      )) {
+        final deco = c.decoration;
+        if (deco is BoxDecoration && deco.borderRadius is BorderRadius) {
+          final br = deco.borderRadius! as BorderRadius;
+          if (br.topLeft != br.topRight) return br;
+        }
+      }
+      fail('drawer outer container not found');
+    }
+
+    testWidgets('rounds the right edge when positioned left', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: const DrawerRailTheme(borderRadius: 24),
+          ),
+        ),
+      );
+
+      final br = drawerEdgeRadius(tester);
+      expect(br.topRight, const Radius.circular(24));
+      expect(br.bottomRight, const Radius.circular(24));
+      expect(br.topLeft, Radius.zero);
+      expect(br.bottomLeft, Radius.zero);
+    });
+
+    testWidgets('rounds the left edge when positioned right', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: const DrawerRailTheme(
+              borderRadius: 24,
+              position: DrawerRailPosition.right,
+            ),
+          ),
+        ),
+      );
+
+      final br = drawerEdgeRadius(tester);
+      expect(br.topLeft, const Radius.circular(24));
+      expect(br.bottomLeft, const Radius.circular(24));
+      expect(br.topRight, Radius.zero);
+      expect(br.bottomRight, Radius.zero);
+    });
   });
 }
