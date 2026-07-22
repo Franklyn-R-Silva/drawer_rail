@@ -90,6 +90,8 @@ class _HomePageState extends State<HomePage> {
     iconSize: 22,
     railIconSize: 24,
     pressedScale: 0.95,
+    // Use a flat background highlight on hover instead of the default shadow.
+    hoverEffect: DrawerHoverEffect.highlight,
     sectionUppercase: false,
     selectedColor: Color(0xFF10B981),
     onSelectedColor: Colors.white,

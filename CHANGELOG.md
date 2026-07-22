@@ -2,6 +2,15 @@
 
 <!-- Add upcoming changes under a new "## Unreleased" heading. -->
 
+## 0.2.0
+
+- Add `DrawerRailTheme.hoverEffect` (`DrawerHoverEffect.shadow` / `.highlight` /
+  `.none`) so the item hover feedback can be switched or turned off, plus
+  `hoverHighlightColor` for the highlight variant.
+- Fix the murky/cloudy look of the hover shadow: in `shadow` mode an opaque
+  surface is now painted behind the card, so the shadow reads as a lift instead
+  of a colored haze bleeding through transparent items.
+
 ## 0.1.0
 
 Initial release.

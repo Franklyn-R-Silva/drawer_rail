@@ -112,6 +112,77 @@ void main() {
       expect(find.text('Home'), findsNothing);
     });
 
+    testWidgets('showSearch:false hides the search field and rail button',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            showSearch: false,
+          ),
+        ),
+      );
+
+      // No search field in the expanded panel.
+      expect(find.byType(TextField), findsNothing);
+
+      // No search button in the collapsed rail either.
+      controller.setCollapsed(true);
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.search_rounded), findsNothing);
+    });
+
+    // The unhovered card must never paint a shadow, whichever effect is set —
+    // this guards against a shadow bleeding through as a colored haze.
+    bool anyPressCardHasShadow(WidgetTester tester) {
+      for (final c in tester.widgetList<AnimatedContainer>(
+        find.descendant(
+          of: find.byType(AnimatedPressCard),
+          matching: find.byType(AnimatedContainer),
+        ),
+      )) {
+        final deco = c.decoration;
+        if (deco is BoxDecoration && (deco.boxShadow?.isNotEmpty ?? false)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    testWidgets('hoverEffect.none never paints a hover shadow', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: const DrawerRailTheme(hoverEffect: DrawerHoverEffect.none),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(anyPressCardHasShadow(tester), isFalse);
+    });
+
+    testWidgets('hoverEffect.highlight never paints a hover shadow',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: const DrawerRailTheme(
+              hoverEffect: DrawerHoverEffect.highlight,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(anyPressCardHasShadow(tester), isFalse);
+    });
+
     testWidgets('applies custom theme icons and section casing',
         (tester) async {
       controller.setCollapsed(true);
