@@ -387,11 +387,11 @@ class _DrawerRailState extends State<DrawerRail> {
         hoverShadowColor: theme.hoverShadowColor,
         hoverHighlightColor: theme.hoverHighlightColor,
         surfaceColor: theme.backgroundColor,
+        baseColor: isSelected ? theme.selectedColor : Colors.transparent,
         borderRadius: BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
         child: Container(
           padding: theme.itemPadding,
           decoration: BoxDecoration(
-            color: isSelected ? theme.selectedColor : Colors.transparent,
             borderRadius: BorderRadius.circular(theme.itemBorderRadius),
           ),
           child: Row(
@@ -431,6 +431,7 @@ class _DrawerRailState extends State<DrawerRail> {
             hoverShadowColor: theme.hoverShadowColor,
             hoverHighlightColor: theme.hoverHighlightColor,
             surfaceColor: theme.backgroundColor,
+            baseColor: Colors.transparent,
             borderRadius:
                 BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
             child: Container(
@@ -606,14 +607,11 @@ class _RailButton extends StatelessWidget {
           hoverShadowColor: theme.hoverShadowColor,
           hoverHighlightColor: theme.hoverHighlightColor,
           surfaceColor: theme.backgroundColor,
+          baseColor: selected ? theme.selectedColor : Colors.transparent,
           borderRadius:
               BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
-          child: Container(
+          child: SizedBox(
             height: theme.railItemHeight,
-            decoration: BoxDecoration(
-              color: selected ? theme.selectedColor : Colors.transparent,
-              borderRadius: BorderRadius.circular(theme.itemBorderRadius),
-            ),
             child: Stack(
               alignment: Alignment.center,
               children: [

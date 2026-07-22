@@ -2,6 +2,10 @@
 
 <!-- Add upcoming changes under a new "## Unreleased" heading. -->
 
+## 0.2.1
+
+- Fix visual bug where hover effect was applied as an overlay affecting foreground legibility. Hover now strictly alters the background color using InkWell, keeping text and icons at 100% opacity.
+
 ## 0.2.0
 
 - Add `DrawerRailTheme.hoverEffect` (`DrawerHoverEffect.shadow` / `.highlight` /
