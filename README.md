@@ -208,7 +208,11 @@ DrawerRail(
     labelColor: Color(0xFF0F172A),
     sectionColor: Color(0xFF6366F1),
     badgeCountColor: Color(0xFFEF4444),
-    hoverShadowColor: Color(0x1F6366F1),
+
+    // Hover feedback: shadow (default), highlight or none
+    hoverEffect: DrawerHoverEffect.shadow,
+    hoverShadowColor: Color(0x1F6366F1),    // used in shadow mode
+    hoverHighlightColor: Color(0x146366F1), // used in highlight mode
 
     // Text styles (label color is applied automatically per state)
     labelTextStyle: TextStyle(fontWeight: FontWeight.w600),
@@ -238,7 +242,8 @@ DrawerRail(
 | ---------- | ------ |
 | **Sizing** | `expandedWidth`, `railWidth`, `railItemHeight`, `iconSize`, `railIconSize`, `borderRadius`, `itemBorderRadius` |
 | **Spacing**| `contentPadding`, `itemPadding`, `groupChildIndent` |
-| **Colors** | `backgroundColor`, `selectedColor`, `onSelectedColor`, `iconColor`, `labelColor`, `sectionColor`, `badgeTextColor`, `badgeCountColor`, `menuBackgroundColor`, `searchFillColor`, `hoverShadowColor`, `shadow` |
+| **Colors** | `backgroundColor`, `selectedColor`, `onSelectedColor`, `iconColor`, `labelColor`, `sectionColor`, `badgeTextColor`, `badgeCountColor`, `menuBackgroundColor`, `searchFillColor`, `shadow` |
+| **Hover**  | `hoverEffect` (`shadow` / `highlight` / `none`), `hoverShadowColor`, `hoverHighlightColor` |
 | **Text**   | `labelTextStyle`, `selectedLabelTextStyle`, `sectionTextStyle`, `badgeTextStyle`, `sectionUppercase` |
 | **Icons**  | `collapseIcon`, `expandIcon`, `searchIcon`, `clearSearchIcon`, `groupTrailingIcon` |
 | **Motion** | `animationDuration`, `animationCurve`, `groupAnimationDuration`, `pressedScale` |

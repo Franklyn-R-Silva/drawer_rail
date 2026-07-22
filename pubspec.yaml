@@ -2,7 +2,7 @@ name: drawer_rail
 description: >-
   A collapsible, themeable side navigation drawer with a full-width panel and a
   narrow icon rail: search, sections, badges, expandable groups and flyouts.
-version: 0.1.0
+version: 0.2.0
 homepage: https://devfrs.com
 repository: https://github.com/Franklyn-R-Silva/drawer_rail
 issue_tracker: https://github.com/Franklyn-R-Silva/drawer_rail/issues

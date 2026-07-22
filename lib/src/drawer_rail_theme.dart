@@ -11,6 +11,19 @@ enum DrawerRailPosition {
   right,
 }
 
+/// The visual feedback shown when an item is hovered.
+enum DrawerHoverEffect {
+  /// The item lifts with a soft shadow (an opaque surface is painted behind it
+  /// so the shadow reads as elevation rather than a colored haze).
+  shadow,
+
+  /// The item's background is tinted with a subtle highlight. No shadow.
+  highlight,
+
+  /// No hover feedback. The press micro-scale still applies.
+  none,
+}
+
 /// Visual configuration for a [DrawerRail].
 ///
 /// Every field is optional. Any value left `null` falls back to a sensible
@@ -50,7 +63,9 @@ class DrawerRailTheme {
     this.badgeCountColor,
     this.menuBackgroundColor,
     this.searchFillColor,
+    this.hoverEffect = DrawerHoverEffect.shadow,
     this.hoverShadowColor,
+    this.hoverHighlightColor,
     this.shadow,
     this.labelTextStyle,
     this.selectedLabelTextStyle,
@@ -149,9 +164,20 @@ class DrawerRailTheme {
   /// [ColorScheme.surfaceContainerHigh].
   final Color? searchFillColor;
 
-  /// The color of the soft shadow shown when hovering an item. Defaults to a
-  /// translucent [ColorScheme.primary].
+  /// Which visual feedback an item shows on hover. Defaults to
+  /// [DrawerHoverEffect.shadow]. Use [DrawerHoverEffect.none] to disable the
+  /// hover effect entirely (the press micro-scale still applies).
+  final DrawerHoverEffect hoverEffect;
+
+  /// The color of the soft shadow shown when hovering an item, used when
+  /// [hoverEffect] is [DrawerHoverEffect.shadow]. Defaults to a translucent
+  /// [ColorScheme.primary].
   final Color? hoverShadowColor;
+
+  /// The background tint shown when hovering an item, used when [hoverEffect]
+  /// is [DrawerHoverEffect.highlight]. Defaults to a subtle translucent
+  /// [ColorScheme.primary].
+  final Color? hoverHighlightColor;
 
   /// The shadow cast by the drawer. Defaults to a soft shadow on the outer
   /// edge (see [position]).
@@ -228,8 +254,11 @@ class DrawerRailTheme {
       errorColor: scheme.error,
       menuBackgroundColor: menuBackgroundColor ?? scheme.surfaceContainerHigh,
       searchFillColor: searchFillColor ?? scheme.surfaceContainerHigh,
+      hoverEffect: hoverEffect,
       hoverShadowColor:
           hoverShadowColor ?? scheme.primary.withValues(alpha: 0.12),
+      hoverHighlightColor:
+          hoverHighlightColor ?? scheme.primary.withValues(alpha: 0.08),
       labelTextStyle: baseLabel,
       selectedLabelTextStyle: selectedLabelTextStyle ?? baseLabel,
       sectionTextStyle: (sectionTextStyle ??
@@ -296,7 +325,9 @@ class ResolvedDrawerRailTheme {
     required this.errorColor,
     required this.menuBackgroundColor,
     required this.searchFillColor,
+    required this.hoverEffect,
     required this.hoverShadowColor,
+    required this.hoverHighlightColor,
     required this.labelTextStyle,
     required this.selectedLabelTextStyle,
     required this.sectionTextStyle,
@@ -399,8 +430,14 @@ class ResolvedDrawerRailTheme {
   /// The fill color of the search field.
   final Color searchFillColor;
 
+  /// See [DrawerRailTheme.hoverEffect].
+  final DrawerHoverEffect hoverEffect;
+
   /// The resolved hover shadow color.
   final Color hoverShadowColor;
+
+  /// The resolved hover highlight color.
+  final Color hoverHighlightColor;
 
   /// The resolved base label style (color applied per state).
   final TextStyle labelTextStyle;

@@ -383,7 +383,10 @@ class _DrawerRailState extends State<DrawerRail> {
       child: AnimatedPressCard(
         onTap: () => _openLink(link),
         pressedScale: theme.pressedScale,
+        hoverEffect: theme.hoverEffect,
         hoverShadowColor: theme.hoverShadowColor,
+        hoverHighlightColor: theme.hoverHighlightColor,
+        surfaceColor: theme.backgroundColor,
         borderRadius: BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
         child: Container(
           padding: theme.itemPadding,
@@ -424,7 +427,10 @@ class _DrawerRailState extends State<DrawerRail> {
           child: AnimatedPressCard(
             onTap: () => _controller.toggleGroup(group.id),
             pressedScale: theme.pressedScale,
+            hoverEffect: theme.hoverEffect,
             hoverShadowColor: theme.hoverShadowColor,
+            hoverHighlightColor: theme.hoverHighlightColor,
+            surfaceColor: theme.backgroundColor,
             borderRadius:
                 BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
             child: Container(
@@ -596,7 +602,10 @@ class _RailButton extends StatelessWidget {
         child: AnimatedPressCard(
           onTap: onTap,
           pressedScale: theme.pressedScale,
+          hoverEffect: theme.hoverEffect,
           hoverShadowColor: theme.hoverShadowColor,
+          hoverHighlightColor: theme.hoverHighlightColor,
+          surfaceColor: theme.backgroundColor,
           borderRadius:
               BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
           child: Container(
