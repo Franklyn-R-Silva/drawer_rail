@@ -35,4 +35,12 @@ jobs:
         run: flutter test
 
       - name: Publish dry-run
-        run: flutter pub publish --dry-run
+        # `pub publish --dry-run` exits non-zero on *any* warning, including
+        # "checked-in files are modified in git" — which says nothing about the
+        # package and can trip on stat-only index staleness in a runner. Print
+        # what git sees (this also refreshes the index) so a real modification
+        # is visible in the log instead of hiding behind an opaque exit 65.
+        run: |
+          git status --porcelain
+          git diff --stat
+          flutter pub publish --dry-run
