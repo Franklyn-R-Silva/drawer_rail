@@ -25,11 +25,17 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Git state after pub get
+        run: git status --porcelain
+
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed .
 
       - name: Analyze
         run: flutter analyze
+
+      - name: Git state after analyze
+        run: git status --porcelain
 
       - name: Run tests
         run: flutter test
@@ -41,6 +47,5 @@ jobs:
         # what git sees (this also refreshes the index) so a real modification
         # is visible in the log instead of hiding behind an opaque exit 65.
         run: |
-          git status --porcelain
-          git diff --stat
+          git --no-pager diff
           flutter pub publish --dry-run
