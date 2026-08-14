@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'animated_press_card.dart';
@@ -113,14 +115,116 @@ class _DrawerRailState extends State<DrawerRail> {
   final _searchFocus = FocusNode();
   String _query = '';
 
+  // Hover state. Every timer here is cancelled in dispose and every callback
+  // bails out when the state is gone, so a pointer leaving right as the drawer
+  // is torn down can never call setState on a dead State.
+  Timer? _peekTimer;
+  Timer? _groupTimer;
+  Timer? _menuTimer;
+  Timer? _linkTimer;
+
+  /// The group hover opened, if any. Only this one is closed again when the
+  /// pointer leaves — a group the user opened by clicking stays open.
+  String? _hoverOpenedGroupId;
+
+  /// One [MenuController] per group id, so the flyout can be driven from both
+  /// the rail button and the menu panel.
+  final _menuControllers = <String, MenuController>{};
+
   @override
   void dispose() {
+    _peekTimer?.cancel();
+    _groupTimer?.cancel();
+    _menuTimer?.cancel();
+    _linkTimer?.cancel();
     _searchController.dispose();
     _searchFocus.dispose();
     super.dispose();
   }
 
   DrawerRailController get _controller => widget.controller;
+
+  // ---- Hover ---------------------------------------------------------------
+
+  /// Runs [action] after [delay], replacing whatever was pending on the same
+  /// slot. Returns the new timer so the caller can store it.
+  Timer _after(Timer? pending, Duration delay, VoidCallback action) {
+    pending?.cancel();
+    return Timer(delay, () {
+      if (mounted) action();
+    });
+  }
+
+  /// Pins the collapsed state from an explicit user action, dropping any hover
+  /// peek in flight so a pending timer cannot undo the click a frame later.
+  void _pinCollapsed(bool value) {
+    _peekTimer?.cancel();
+    _controller.setCollapsed(value);
+  }
+
+  /// (A) Pointer entering/leaving the drawer peeks the collapsed rail open.
+  void _onDrawerHover(bool entered, ResolvedDrawerRailTheme theme) {
+    if (theme.railTrigger != DrawerActivationMode.hover) return;
+    if (entered && !_controller.collapsed) return;
+    _peekTimer = _after(
+      _peekTimer,
+      entered ? theme.hoverOpenDelay : theme.hoverCloseDelay,
+      () => _controller.setHoverPeek(entered),
+    );
+  }
+
+  /// (C) Pointer entering/leaving an inline group in the expanded panel.
+  void _onGroupHover(
+    bool entered,
+    DrawerGroup group,
+    ResolvedDrawerRailTheme theme,
+  ) {
+    if (theme.groupTrigger != DrawerActivationMode.hover) return;
+    _groupTimer = _after(
+      _groupTimer,
+      entered ? theme.hoverOpenDelay : theme.hoverCloseDelay,
+      () {
+        if (entered) {
+          if (_controller.isGroupExpanded(group.id)) return;
+          _hoverOpenedGroupId = group.id;
+          _controller.setGroupExpanded(group.id, true);
+        } else if (_hoverOpenedGroupId == group.id) {
+          _hoverOpenedGroupId = null;
+          _controller.setGroupExpanded(group.id, false);
+        }
+      },
+    );
+  }
+
+  /// (B) Pointer entering/leaving a rail group button or its flyout panel. The
+  /// close is delayed so crossing the gap from button to overlay — which fires
+  /// an exit — does not slam the menu shut.
+  void _onMenuHover(
+    bool entered,
+    MenuController menu,
+    ResolvedDrawerRailTheme theme,
+  ) {
+    if (theme.groupTrigger != DrawerActivationMode.hover) return;
+    _menuTimer = _after(
+      _menuTimer,
+      entered ? theme.hoverOpenDelay : theme.hoverCloseDelay,
+      () => entered ? menu.open() : menu.close(),
+    );
+  }
+
+  /// (D) Pointer resting on a link activates it, navigation included.
+  void _onLinkHover(
+    bool entered,
+    DrawerLink link,
+    ResolvedDrawerRailTheme theme,
+  ) {
+    if (theme.linkTrigger != DrawerActivationMode.hover) return;
+    _linkTimer?.cancel();
+    // Leaving only ever cancels: a link that was not dwelled on long enough
+    // must not fire on the way out.
+    if (!entered) return;
+    _linkTimer = _after(null, theme.hoverSelectDelay, () => _openLink(link));
+  }
 
   /// Diacritic-insensitive `contains`, so "acao" matches "Ação".
   bool _matches(String text) {
@@ -148,46 +252,53 @@ class _DrawerRailState extends State<DrawerRail> {
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
-        final collapsed = _controller.collapsed;
+        // The rendered state, which a hover peek widens without touching the
+        // pinned `collapsed` the caller persists.
+        final collapsed = _controller.railCollapsed;
         final width = collapsed ? theme.railWidth : theme.expandedWidth;
 
-        return AnimatedContainer(
-          duration: theme.animationDuration,
-          curve: theme.animationCurve,
-          width: width,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: theme.backgroundColor,
-            borderRadius: theme.position == DrawerRailPosition.right
-                ? BorderRadius.horizontal(
-                    left: Radius.circular(theme.borderRadius),
-                  )
-                : BorderRadius.horizontal(
-                    right: Radius.circular(theme.borderRadius),
-                  ),
-            boxShadow: theme.shadow,
-          ),
-          // Lay content out at its natural width regardless of the animating
-          // container width, so the tween never under-constrains it (no
-          // overflow); the container clips the reveal.
-          child: OverflowBox(
-            alignment: Alignment.centerLeft,
-            maxWidth: double.infinity,
-            child: SizedBox(
-              width: width,
-              child: Material(
-                type: MaterialType.transparency,
-                child: SafeArea(
-                  child: Column(
-                    children: [
-                      _buildHeader(collapsed, theme),
-                      if (widget.showSearch) _buildSearch(collapsed, theme),
-                      Expanded(child: _buildMenu(collapsed, theme)),
-                      if (widget.footerBuilder != null) ...[
-                        if (widget.showFooterDivider) const Divider(height: 1),
-                        widget.footerBuilder!(context, collapsed),
+        return MouseRegion(
+          onEnter: (_) => _onDrawerHover(true, theme),
+          onExit: (_) => _onDrawerHover(false, theme),
+          child: AnimatedContainer(
+            duration: theme.animationDuration,
+            curve: theme.animationCurve,
+            width: width,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: theme.backgroundColor,
+              borderRadius: theme.position == DrawerRailPosition.right
+                  ? BorderRadius.horizontal(
+                      left: Radius.circular(theme.borderRadius),
+                    )
+                  : BorderRadius.horizontal(
+                      right: Radius.circular(theme.borderRadius),
+                    ),
+              boxShadow: theme.shadow,
+            ),
+            // Lay content out at its natural width regardless of the animating
+            // container width, so the tween never under-constrains it (no
+            // overflow); the container clips the reveal.
+            child: OverflowBox(
+              alignment: Alignment.centerLeft,
+              maxWidth: double.infinity,
+              child: SizedBox(
+                width: width,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: SafeArea(
+                    child: Column(
+                      children: [
+                        _buildHeader(collapsed, theme),
+                        if (widget.showSearch) _buildSearch(collapsed, theme),
+                        Expanded(child: _buildMenu(collapsed, theme)),
+                        if (widget.footerBuilder != null) ...[
+                          if (widget.showFooterDivider)
+                            const Divider(height: 1),
+                          widget.footerBuilder!(context, collapsed),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -217,7 +328,7 @@ class _DrawerRailState extends State<DrawerRail> {
               IconButton(
                 tooltip: widget.labels.expandTooltip,
                 icon: Icon(theme.expandIcon),
-                onPressed: () => _controller.setCollapsed(false),
+                onPressed: () => _pinCollapsed(false),
               ),
           ],
         ),
@@ -233,7 +344,7 @@ class _DrawerRailState extends State<DrawerRail> {
             IconButton(
               tooltip: widget.labels.collapseTooltip,
               icon: Icon(theme.collapseIcon),
-              onPressed: () => _controller.setCollapsed(true),
+              onPressed: () => _pinCollapsed(true),
             ),
         ],
       ),
@@ -250,7 +361,7 @@ class _DrawerRailState extends State<DrawerRail> {
           tooltip: widget.labels.searchTooltip,
           icon: Icon(theme.searchIcon),
           onPressed: () {
-            _controller.setCollapsed(false);
+            _pinCollapsed(false);
             WidgetsBinding.instance
                 .addPostFrameCallback((_) => _searchFocus.requestFocus());
           },
@@ -380,34 +491,39 @@ class _DrawerRailState extends State<DrawerRail> {
         bottom: 2,
         left: indent ? theme.groupChildIndent : 0,
       ),
-      child: AnimatedPressCard(
-        onTap: () => _openLink(link),
-        pressedScale: theme.pressedScale,
-        hoverEffect: theme.hoverEffect,
-        hoverShadowColor: theme.hoverShadowColor,
-        hoverHighlightColor: theme.hoverHighlightColor,
-        surfaceColor: theme.backgroundColor,
-        borderRadius: BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
-        child: Container(
-          padding: theme.itemPadding,
-          decoration: BoxDecoration(
-            color: isSelected ? theme.selectedColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(theme.itemBorderRadius),
-          ),
-          child: Row(
-            children: [
-              Icon(link.icon, size: theme.iconSize, color: fg),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  link.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: baseStyle.copyWith(color: fg),
+      child: MouseRegion(
+        onEnter: (_) => _onLinkHover(true, link, theme),
+        onExit: (_) => _onLinkHover(false, link, theme),
+        child: AnimatedPressCard(
+          onTap: () => _openLink(link),
+          pressedScale: theme.pressedScale,
+          hoverEffect: theme.hoverEffect,
+          hoverShadowColor: theme.hoverShadowColor,
+          hoverHighlightColor: theme.hoverHighlightColor,
+          surfaceColor: theme.backgroundColor,
+          baseColor: isSelected ? theme.selectedColor : Colors.transparent,
+          borderRadius:
+              BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
+          child: Container(
+            padding: theme.itemPadding,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(theme.itemBorderRadius),
+            ),
+            child: Row(
+              children: [
+                Icon(link.icon, size: theme.iconSize, color: fg),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    link.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: baseStyle.copyWith(color: fg),
+                  ),
                 ),
-              ),
-              if (link.badge != null) _badge(link.badge!, isSelected, theme),
-            ],
+                if (link.badge != null) _badge(link.badge!, isSelected, theme),
+              ],
+            ),
           ),
         ),
       ),
@@ -420,67 +536,82 @@ class _DrawerRailState extends State<DrawerRail> {
     ResolvedDrawerRailTheme theme,
   ) {
     final open = _controller.isGroupExpanded(group.id);
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 2),
-          child: AnimatedPressCard(
-            onTap: () => _controller.toggleGroup(group.id),
-            pressedScale: theme.pressedScale,
-            hoverEffect: theme.hoverEffect,
-            hoverShadowColor: theme.hoverShadowColor,
-            hoverHighlightColor: theme.hoverHighlightColor,
-            surfaceColor: theme.backgroundColor,
-            borderRadius:
-                BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
-            child: Container(
-              padding: theme.itemPadding,
-              child: Row(
-                children: [
-                  Icon(
-                    group.icon,
-                    size: theme.iconSize,
-                    color: theme.iconColor,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      group.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.labelTextStyle.copyWith(
-                        color: theme.labelColor,
+    // The region spans header *and* children, so moving the pointer down into
+    // the children does not read as leaving the group.
+    return MouseRegion(
+      onEnter: (_) => _onGroupHover(true, group, theme),
+      onExit: (_) => _onGroupHover(false, group, theme),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: AnimatedPressCard(
+              onTap: () => _toggleGroup(group),
+              pressedScale: theme.pressedScale,
+              hoverEffect: theme.hoverEffect,
+              hoverShadowColor: theme.hoverShadowColor,
+              hoverHighlightColor: theme.hoverHighlightColor,
+              surfaceColor: theme.backgroundColor,
+              baseColor: Colors.transparent,
+              borderRadius:
+                  BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
+              child: Container(
+                padding: theme.itemPadding,
+                child: Row(
+                  children: [
+                    Icon(
+                      group.icon,
+                      size: theme.iconSize,
+                      color: theme.iconColor,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        group.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.labelTextStyle.copyWith(
+                          color: theme.labelColor,
+                        ),
                       ),
                     ),
-                  ),
-                  if (group.badge != null) _badge(group.badge!, false, theme),
-                  AnimatedRotation(
-                    turns: open ? 0.5 : 0,
-                    duration: theme.groupAnimationDuration,
-                    child: Icon(
-                      theme.groupTrailingIcon,
-                      color: theme.surfaceVariantColor,
+                    if (group.badge != null) _badge(group.badge!, false, theme),
+                    AnimatedRotation(
+                      turns: open ? 0.5 : 0,
+                      duration: theme.groupAnimationDuration,
+                      child: Icon(
+                        theme.groupTrailingIcon,
+                        color: theme.surfaceVariantColor,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-        AnimatedCrossFade(
-          firstChild: const SizedBox(width: double.infinity),
-          secondChild: Column(
-            children: [
-              for (final child in group.children)
-                _linkTile(child, selected == child.id, theme, indent: true),
-            ],
+          AnimatedCrossFade(
+            firstChild: const SizedBox(width: double.infinity),
+            secondChild: Column(
+              children: [
+                for (final child in group.children)
+                  _linkTile(child, selected == child.id, theme, indent: true),
+              ],
+            ),
+            crossFadeState:
+                open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            duration: theme.groupAnimationDuration,
           ),
-          crossFadeState:
-              open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-          duration: theme.groupAnimationDuration,
-        ),
-      ],
+        ],
+      ),
     );
+  }
+
+  /// Toggles a group from an explicit click, which also *pins* it: a group the
+  /// user clicked open must not close just because the pointer left.
+  void _toggleGroup(DrawerGroup group) {
+    _groupTimer?.cancel();
+    if (_hoverOpenedGroupId == group.id) _hoverOpenedGroupId = null;
+    _controller.toggleGroup(group.id);
   }
 
   // ---- Rail (collapsed) tiles ---------------------------------------------
@@ -490,14 +621,18 @@ class _DrawerRailState extends State<DrawerRail> {
     bool isSelected,
     ResolvedDrawerRailTheme theme,
   ) {
-    return _RailButton(
-      icon: link.icon,
-      tooltip: link.label,
-      selected: isSelected,
-      danger: link.danger,
-      badge: link.badge,
-      theme: theme,
-      onTap: () => _openLink(link),
+    return MouseRegion(
+      onEnter: (_) => _onLinkHover(true, link, theme),
+      onExit: (_) => _onLinkHover(false, link, theme),
+      child: _RailButton(
+        icon: link.icon,
+        tooltip: link.label,
+        selected: isSelected,
+        danger: link.danger,
+        badge: link.badge,
+        theme: theme,
+        onTap: () => _openLink(link),
+      ),
     );
   }
 
@@ -506,7 +641,11 @@ class _DrawerRailState extends State<DrawerRail> {
     String? selected,
     ResolvedDrawerRailTheme theme,
   ) {
+    // Owned by the state (not the builder callback) so the flyout can be kept
+    // open from the menu panel as well as from the rail button.
+    final menu = _menuControllers.putIfAbsent(group.id, MenuController.new);
     return MenuAnchor(
+      controller: menu,
       style: MenuStyle(
         backgroundColor: WidgetStatePropertyAll(theme.menuBackgroundColor),
         shape: WidgetStatePropertyAll(
@@ -519,20 +658,40 @@ class _DrawerRailState extends State<DrawerRail> {
       ),
       menuChildren: [
         for (final child in group.children)
-          MenuItemButton(
-            leadingIcon:
-                Icon(child.icon, size: theme.iconSize, color: theme.iconColor),
-            onPressed: () => _openLink(child),
-            child: Text(child.label),
+          // Entering an item cancels the pending close, so the flyout survives
+          // the pointer travelling from the rail button across to the overlay.
+          MouseRegion(
+            onEnter: (_) => _onMenuHover(true, menu, theme),
+            onExit: (_) => _onMenuHover(false, menu, theme),
+            child: MenuItemButton(
+              leadingIcon: Icon(
+                child.icon,
+                size: theme.iconSize,
+                color: theme.iconColor,
+              ),
+              onPressed: () => _openLink(child),
+              child: Text(child.label),
+            ),
           ),
       ],
-      builder: (context, menu, _) => _RailButton(
-        icon: group.icon,
-        tooltip: group.label,
-        selected: group.children.any((c) => c.id == selected),
-        theme: theme,
-        badge: group.badge,
-        onTap: () => menu.isOpen ? menu.close() : menu.open(),
+      builder: (context, controller, _) => MouseRegion(
+        onEnter: (_) => _onMenuHover(true, controller, theme),
+        onExit: (_) => _onMenuHover(false, controller, theme),
+        child: _RailButton(
+          icon: group.icon,
+          tooltip: group.label,
+          selected: group.children.any((c) => c.id == selected),
+          theme: theme,
+          badge: group.badge,
+          onTap: () {
+            _menuTimer?.cancel();
+            if (controller.isOpen) {
+              controller.close();
+            } else {
+              controller.open();
+            }
+          },
+        ),
       ),
     );
   }
@@ -563,6 +722,8 @@ class _DrawerRailState extends State<DrawerRail> {
   }
 
   void _openLink(DrawerLink link) {
+    // A click beats a hover dwell still counting down on some other item.
+    _linkTimer?.cancel();
     _controller.select(link.id);
     link.onTap(context);
   }
@@ -606,14 +767,11 @@ class _RailButton extends StatelessWidget {
           hoverShadowColor: theme.hoverShadowColor,
           hoverHighlightColor: theme.hoverHighlightColor,
           surfaceColor: theme.backgroundColor,
+          baseColor: selected ? theme.selectedColor : Colors.transparent,
           borderRadius:
               BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
-          child: Container(
+          child: SizedBox(
             height: theme.railItemHeight,
-            decoration: BoxDecoration(
-              color: selected ? theme.selectedColor : Colors.transparent,
-              borderRadius: BorderRadius.circular(theme.itemBorderRadius),
-            ),
             child: Stack(
               alignment: Alignment.center,
               children: [

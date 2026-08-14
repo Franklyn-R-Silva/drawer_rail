@@ -92,6 +92,11 @@ class _HomePageState extends State<HomePage> {
     pressedScale: 0.95,
     // Use a flat background highlight on hover instead of the default shadow.
     hoverEffect: DrawerHoverEffect.highlight,
+    // Pointer-driven navigation, for web/desktop: the rail peeks open while
+    // hovered and groups open without a click. Links stay on click — hovering
+    // one would navigate. Tapping keeps working everywhere, so touch is fine.
+    railTrigger: DrawerActivationMode.hover,
+    groupTrigger: DrawerActivationMode.hover,
     sectionUppercase: false,
     selectedColor: Color(0xFF10B981),
     onSelectedColor: Colors.white,

@@ -24,6 +24,22 @@ enum DrawerHoverEffect {
   none,
 }
 
+/// How an interaction is triggered on pointer-capable platforms (web,
+/// desktop).
+///
+/// Hover is always *additive*: the tap/click path keeps working in every mode,
+/// so touch users — where hover events never fire — are never locked out of an
+/// item.
+enum DrawerActivationMode {
+  /// The interaction only happens on tap/click. This is the default, and the
+  /// only mode that works on touch devices.
+  click,
+
+  /// The interaction also happens when the mouse pointer rests over the
+  /// target. Tap/click keeps working.
+  hover,
+}
+
 /// Visual configuration for a [DrawerRail].
 ///
 /// Every field is optional. Any value left `null` falls back to a sensible
@@ -66,6 +82,12 @@ class DrawerRailTheme {
     this.hoverEffect = DrawerHoverEffect.shadow,
     this.hoverShadowColor,
     this.hoverHighlightColor,
+    this.railTrigger = DrawerActivationMode.click,
+    this.groupTrigger = DrawerActivationMode.click,
+    this.linkTrigger = DrawerActivationMode.click,
+    this.hoverOpenDelay = const Duration(milliseconds: 120),
+    this.hoverCloseDelay = const Duration(milliseconds: 220),
+    this.hoverSelectDelay = const Duration(milliseconds: 300),
     this.shadow,
     this.labelTextStyle,
     this.selectedLabelTextStyle,
@@ -179,6 +201,44 @@ class DrawerRailTheme {
   /// [ColorScheme.primary].
   final Color? hoverHighlightColor;
 
+  /// How the collapsed rail expands. With [DrawerActivationMode.hover], moving
+  /// the mouse over the rail expands it after [hoverOpenDelay] and leaving
+  /// collapses it again after [hoverCloseDelay] — a temporary "peek" that does
+  /// not change the pinned [DrawerRailController.collapsed] state. The
+  /// collapse/expand button keeps working and pins the state. Defaults to
+  /// [DrawerActivationMode.click].
+  final DrawerActivationMode railTrigger;
+
+  /// How a [DrawerGroup] opens, both as a flyout in the collapsed rail and
+  /// inline in the expanded panel. With [DrawerActivationMode.hover] it opens
+  /// after [hoverOpenDelay] and closes after [hoverCloseDelay] once the pointer
+  /// leaves — but only if hover opened it, so a group you opened by clicking
+  /// stays open. Defaults to [DrawerActivationMode.click].
+  final DrawerActivationMode groupTrigger;
+
+  /// How a [DrawerLink] is activated. With [DrawerActivationMode.hover],
+  /// resting the pointer on a link for [hoverSelectDelay] selects it *and* runs
+  /// its `onTap` — the same thing a click does, navigation included.
+  ///
+  /// Use with care: on a dense menu this can navigate away while the user is
+  /// only passing the pointer through. The dwell delay exists to make that
+  /// unlikely, not impossible. Defaults to [DrawerActivationMode.click].
+  final DrawerActivationMode linkTrigger;
+
+  /// How long the pointer must rest before a hover-triggered open fires, for
+  /// [railTrigger] and [groupTrigger]. Defaults to 120ms.
+  final Duration hoverOpenDelay;
+
+  /// How long after the pointer leaves before a hover-opened rail or group
+  /// closes. Long enough to survive crossing the gap between a rail button and
+  /// its flyout. Defaults to 220ms.
+  final Duration hoverCloseDelay;
+
+  /// How long the pointer must rest on a link before [linkTrigger] activates
+  /// it. Deliberately longer than [hoverOpenDelay] because the action
+  /// navigates. Defaults to 300ms.
+  final Duration hoverSelectDelay;
+
   /// The shadow cast by the drawer. Defaults to a soft shadow on the outer
   /// edge (see [position]).
   final List<BoxShadow>? shadow;
@@ -259,6 +319,12 @@ class DrawerRailTheme {
           hoverShadowColor ?? scheme.primary.withValues(alpha: 0.12),
       hoverHighlightColor:
           hoverHighlightColor ?? scheme.primary.withValues(alpha: 0.08),
+      railTrigger: railTrigger,
+      groupTrigger: groupTrigger,
+      linkTrigger: linkTrigger,
+      hoverOpenDelay: hoverOpenDelay,
+      hoverCloseDelay: hoverCloseDelay,
+      hoverSelectDelay: hoverSelectDelay,
       labelTextStyle: baseLabel,
       selectedLabelTextStyle: selectedLabelTextStyle ?? baseLabel,
       sectionTextStyle: (sectionTextStyle ??
@@ -328,6 +394,12 @@ class ResolvedDrawerRailTheme {
     required this.hoverEffect,
     required this.hoverShadowColor,
     required this.hoverHighlightColor,
+    required this.railTrigger,
+    required this.groupTrigger,
+    required this.linkTrigger,
+    required this.hoverOpenDelay,
+    required this.hoverCloseDelay,
+    required this.hoverSelectDelay,
     required this.labelTextStyle,
     required this.selectedLabelTextStyle,
     required this.sectionTextStyle,
@@ -438,6 +510,24 @@ class ResolvedDrawerRailTheme {
 
   /// The resolved hover highlight color.
   final Color hoverHighlightColor;
+
+  /// See [DrawerRailTheme.railTrigger].
+  final DrawerActivationMode railTrigger;
+
+  /// See [DrawerRailTheme.groupTrigger].
+  final DrawerActivationMode groupTrigger;
+
+  /// See [DrawerRailTheme.linkTrigger].
+  final DrawerActivationMode linkTrigger;
+
+  /// See [DrawerRailTheme.hoverOpenDelay].
+  final Duration hoverOpenDelay;
+
+  /// See [DrawerRailTheme.hoverCloseDelay].
+  final Duration hoverCloseDelay;
+
+  /// See [DrawerRailTheme.hoverSelectDelay].
+  final Duration hoverSelectDelay;
 
   /// The resolved base label style (color applied per state).
   final TextStyle labelTextStyle;

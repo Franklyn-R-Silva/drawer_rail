@@ -35,4 +35,11 @@ jobs:
         run: flutter test
 
       - name: Publish dry-run
-        run: flutter pub publish --dry-run
+        # `pub publish --dry-run` exits non-zero on *any* warning, including a
+        # dirty working tree — which says nothing about the package. Show the
+        # diff first so that failure arrives with its cause attached instead of
+        # an opaque exit 65. (`flutter pub get` rewriting analysis_options.yaml
+        # is what triggered this once; those writes are checked in now.)
+        run: |
+          git --no-pager diff
+          flutter pub publish --dry-run

@@ -20,6 +20,7 @@ class AnimatedPressCard extends StatefulWidget {
     this.hoverShadowColor,
     this.hoverHighlightColor,
     this.surfaceColor,
+    this.baseColor,
   });
 
   /// The content of the card.
@@ -52,6 +53,9 @@ class AnimatedPressCard extends StatefulWidget {
   /// (often transparent) child as a colored haze. Defaults to the ambient
   /// [ColorScheme.surface].
   final Color? surfaceColor;
+
+  /// The base background color of the card.
+  final Color? baseColor;
 
   @override
   State<AnimatedPressCard> createState() => _AnimatedPressCardState();
@@ -95,68 +99,61 @@ class _AnimatedPressCardState extends State<AnimatedPressCard>
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor:
-          widget.onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTapDown: _onTapDown,
-        onTapUp: _onTapUp,
-        onTapCancel: _onTapCancel,
-        onTap: widget.onTap,
-        child: AnimatedBuilder(
-          animation: _scale,
-          builder: (context, child) => Transform.scale(
-            scale: _scale.value,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-              decoration: _decoration(context),
+    final active = widget.onTap != null;
+    final scheme = Theme.of(context).colorScheme;
+
+    BoxDecoration decoration;
+    if (active && _hovered && widget.hoverEffect == DrawerHoverEffect.shadow) {
+      decoration = BoxDecoration(
+        borderRadius: widget.borderRadius,
+        color: widget.surfaceColor ?? scheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: widget.hoverShadowColor ??
+                scheme.primary.withValues(alpha: 0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      );
+    } else {
+      decoration = BoxDecoration(
+        borderRadius: widget.borderRadius,
+        color: widget.baseColor ?? Colors.transparent,
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _scale,
+      builder: (context, child) => Transform.scale(
+        scale: _scale.value,
+        child: Container(
+          decoration: decoration,
+          child: Material(
+            type: MaterialType.transparency,
+            borderRadius: widget.borderRadius,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: widget.onTap,
+              onTapDown: _onTapDown,
+              onTapUp: _onTapUp,
+              onTapCancel: _onTapCancel,
+              onHover: (isHovering) {
+                setState(() => _hovered = isHovering);
+              },
+              hoverColor:
+                  (active && widget.hoverEffect == DrawerHoverEffect.highlight)
+                      ? (widget.hoverHighlightColor ??
+                          scheme.primary.withValues(alpha: 0.08))
+                      : Colors.transparent,
+              splashColor: scheme.primary.withValues(alpha: 0.12),
+              highlightColor: scheme.primary.withValues(alpha: 0.05),
               child: child,
             ),
           ),
-          child: widget.child,
         ),
       ),
+      child: widget.child,
     );
-  }
-
-  /// The card decoration for the current hover state.
-  ///
-  /// In [DrawerHoverEffect.shadow] mode we also paint an opaque [surfaceColor]
-  /// behind the card: without it the blurred shadow bleeds through the
-  /// (usually transparent) child and reads as a colored haze rather than a
-  /// crisp lift.
-  BoxDecoration _decoration(BuildContext context) {
-    final active = _hovered && widget.onTap != null;
-    if (!active || widget.hoverEffect == DrawerHoverEffect.none) {
-      return BoxDecoration(borderRadius: widget.borderRadius);
-    }
-
-    final scheme = Theme.of(context).colorScheme;
-    switch (widget.hoverEffect) {
-      case DrawerHoverEffect.shadow:
-        return BoxDecoration(
-          borderRadius: widget.borderRadius,
-          color: widget.surfaceColor ?? scheme.surface,
-          boxShadow: [
-            BoxShadow(
-              color: widget.hoverShadowColor ??
-                  scheme.primary.withValues(alpha: 0.12),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        );
-      case DrawerHoverEffect.highlight:
-        return BoxDecoration(
-          borderRadius: widget.borderRadius,
-          color: widget.hoverHighlightColor ??
-              scheme.primary.withValues(alpha: 0.08),
-        );
-      case DrawerHoverEffect.none:
-        return BoxDecoration(borderRadius: widget.borderRadius);
-    }
   }
 }

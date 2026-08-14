@@ -1,4 +1,5 @@
 import 'package:drawer_rail/drawer_rail.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -49,6 +50,51 @@ void main() {
       controller.setCollapsed(true);
 
       expect(notifications, 0);
+    });
+
+    test('hover peek widens the rail without touching collapsed', () {
+      final controller = DrawerRailController(collapsed: true);
+      addTearDown(controller.dispose);
+
+      controller.setHoverPeek(true);
+      expect(controller.hoverPeeking, isTrue);
+      expect(controller.railCollapsed, isFalse, reason: 'peeked open');
+      expect(
+        controller.collapsed,
+        isTrue,
+        reason: 'the persisted preference must survive a peek',
+      );
+
+      controller.setHoverPeek(false);
+      expect(controller.railCollapsed, isTrue);
+    });
+
+    test('an explicit collapse drops a peek in flight', () {
+      final controller = DrawerRailController(collapsed: true);
+      addTearDown(controller.dispose);
+      controller.setHoverPeek(true);
+
+      controller.setCollapsed(true);
+
+      expect(controller.hoverPeeking, isFalse);
+      expect(controller.railCollapsed, isTrue);
+    });
+
+    test('setGroupExpanded is idempotent', () {
+      final controller = DrawerRailController();
+      addTearDown(controller.dispose);
+
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+
+      controller.setGroupExpanded('g', true);
+      controller.setGroupExpanded('g', true);
+      expect(controller.isGroupExpanded('g'), isTrue);
+      expect(notifications, 1, reason: 'the second call changed nothing');
+
+      controller.setGroupExpanded('g', false);
+      expect(controller.isGroupExpanded('g'), isFalse);
+      expect(notifications, 2);
     });
   });
 
@@ -135,13 +181,19 @@ void main() {
 
     // The unhovered card must never paint a shadow, whichever effect is set —
     // this guards against a shadow bleeding through as a colored haze.
+    // AnimatedPressCard paints into a plain Container, not an AnimatedContainer.
     bool anyPressCardHasShadow(WidgetTester tester) {
-      for (final c in tester.widgetList<AnimatedContainer>(
-        find.descendant(
-          of: find.byType(AnimatedPressCard),
-          matching: find.byType(AnimatedContainer),
-        ),
-      )) {
+      final containers = find.descendant(
+        of: find.byType(AnimatedPressCard),
+        matching: find.byType(Container),
+      );
+      expect(
+        containers,
+        findsWidgets,
+        reason: 'no Container under AnimatedPressCard — the check would be '
+            'vacuously true',
+      );
+      for (final c in tester.widgetList<Container>(containers)) {
         final deco = c.decoration;
         if (deco is BoxDecoration && (deco.boxShadow?.isNotEmpty ?? false)) {
           return true;
@@ -252,6 +304,225 @@ void main() {
       expect(br.bottomRight, const Radius.circular(24));
       expect(br.topLeft, Radius.zero);
       expect(br.bottomLeft, Radius.zero);
+    });
+
+    // ---- Hover activation (DrawerActivationMode) --------------------------
+
+    List<DrawerEntry> groupedEntries() => [
+          DrawerGroup(
+            id: 'reports',
+            icon: Icons.bar_chart,
+            label: 'Reports',
+            children: [
+              DrawerLink(
+                id: 'sales',
+                icon: Icons.attach_money,
+                label: 'Sales',
+                onTap: (_) {},
+              ),
+            ],
+          ),
+        ];
+
+    double drawerWidth(WidgetTester tester) =>
+        tester.getSize(find.byType(DrawerRail)).width;
+
+    /// Parks a mouse pointer on [target]. Returns the gesture so the caller can
+    /// move it away again.
+    Future<TestGesture> hoverOver(WidgetTester tester, Finder target) async {
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
+      await tester.pump();
+      await gesture.moveTo(tester.getCenter(target));
+      await tester.pump();
+      return gesture;
+    }
+
+    testWidgets('railTrigger.hover peeks the rail open, then closes on exit',
+        (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: const DrawerRailTheme(
+              railTrigger: DrawerActivationMode.hover,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(drawerWidth(tester), 76);
+
+      final gesture = await hoverOver(tester, find.byType(DrawerRail));
+      await tester.pump(const Duration(milliseconds: 200)); // > openDelay 120
+      await tester.pumpAndSettle();
+
+      expect(drawerWidth(tester), 300);
+      expect(
+        controller.collapsed,
+        isTrue,
+        reason: 'a peek must not rewrite the pinned state',
+      );
+
+      await gesture.moveTo(const Offset(2000, 2000));
+      await tester.pump(const Duration(milliseconds: 300)); // > closeDelay 220
+      await tester.pumpAndSettle();
+
+      expect(drawerWidth(tester), 76);
+    });
+
+    testWidgets('railTrigger defaults to click and ignores hover',
+        (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(DrawerRail(controller: controller, entries: entries())),
+      );
+      await tester.pumpAndSettle();
+
+      await hoverOver(tester, find.byType(DrawerRail));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(drawerWidth(tester), 76);
+      expect(controller.hoverPeeking, isFalse);
+    });
+
+    testWidgets('groupTrigger.hover opens an inline group', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: groupedEntries(),
+            theme: const DrawerRailTheme(
+              groupTrigger: DrawerActivationMode.hover,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(controller.isGroupExpanded('reports'), isFalse);
+
+      final gesture = await hoverOver(tester, find.text('Reports'));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(controller.isGroupExpanded('reports'), isTrue);
+
+      await gesture.moveTo(const Offset(2000, 2000));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      expect(
+        controller.isGroupExpanded('reports'),
+        isFalse,
+        reason: 'hover opened it, so leaving closes it',
+      );
+    });
+
+    testWidgets('groupTrigger.hover opens the rail flyout', (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: groupedEntries(),
+            theme: const DrawerRailTheme(
+              groupTrigger: DrawerActivationMode.hover,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Sales'), findsNothing);
+
+      final gesture = await hoverOver(tester, find.byIcon(Icons.bar_chart));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(find.text('Sales'), findsOneWidget, reason: 'flyout is open');
+
+      await gesture.moveTo(const Offset(2000, 2000));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      expect(find.text('Sales'), findsNothing);
+    });
+
+    testWidgets('a group opened by clicking survives the pointer leaving',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: groupedEntries(),
+            theme: const DrawerRailTheme(
+              groupTrigger: DrawerActivationMode.hover,
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Reports'));
+      await tester.pumpAndSettle();
+      expect(controller.isGroupExpanded('reports'), isTrue);
+
+      final gesture = await hoverOver(tester, find.text('Reports'));
+      await tester.pump(const Duration(milliseconds: 200));
+      await gesture.moveTo(const Offset(2000, 2000));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(controller.isGroupExpanded('reports'), isTrue);
+    });
+
+    testWidgets('linkTrigger.hover activates only after the dwell delay',
+        (tester) async {
+      var opened = 0;
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: [
+              DrawerLink(
+                id: 'home',
+                icon: Icons.home,
+                label: 'Home',
+                onTap: (_) => opened++,
+              ),
+            ],
+            theme: const DrawerRailTheme(
+              linkTrigger: DrawerActivationMode.hover,
+            ),
+          ),
+        ),
+      );
+
+      // Passing through: nowhere near the 300ms dwell.
+      final gesture = await hoverOver(tester, find.text('Home'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await gesture.moveTo(const Offset(2000, 2000));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(controller.selectedId, isNull);
+      expect(opened, 0);
+
+      // Resting on it: fires once, navigation included.
+      await gesture.moveTo(tester.getCenter(find.text('Home')));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(controller.selectedId, 'home');
+      expect(opened, 1);
+    });
+
+    testWidgets('linkTrigger defaults to click and ignores hover',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(DrawerRail(controller: controller, entries: entries())),
+      );
+
+      await hoverOver(tester, find.text('Settings'));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+
+      expect(controller.selectedId, isNull);
     });
 
     testWidgets('rounds the left edge when positioned right', (tester) async {
