@@ -214,6 +214,14 @@ DrawerRail(
     hoverShadowColor: Color(0x1F6366F1),    // used in shadow mode
     hoverHighlightColor: Color(0x146366F1), // used in highlight mode
 
+    // Activation: click (default) or hover, for web/desktop
+    railTrigger: DrawerActivationMode.hover,  // pointer peeks the rail open
+    groupTrigger: DrawerActivationMode.hover, // pointer opens groups/flyouts
+    linkTrigger: DrawerActivationMode.click,  // hover here also navigates
+    hoverOpenDelay: Duration(milliseconds: 120),
+    hoverCloseDelay: Duration(milliseconds: 220),
+    hoverSelectDelay: Duration(milliseconds: 300),
+
     // Text styles (label color is applied automatically per state)
     labelTextStyle: TextStyle(fontWeight: FontWeight.w600),
     sectionTextStyle: TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
@@ -244,10 +252,40 @@ DrawerRail(
 | **Spacing**| `contentPadding`, `itemPadding`, `groupChildIndent` |
 | **Colors** | `backgroundColor`, `selectedColor`, `onSelectedColor`, `iconColor`, `labelColor`, `sectionColor`, `badgeTextColor`, `badgeCountColor`, `menuBackgroundColor`, `searchFillColor`, `shadow` |
 | **Hover**  | `hoverEffect` (`shadow` / `highlight` / `none`), `hoverShadowColor`, `hoverHighlightColor` |
+| **Activation** | `railTrigger`, `groupTrigger`, `linkTrigger` (`click` / `hover`), `hoverOpenDelay`, `hoverCloseDelay`, `hoverSelectDelay` |
 | **Text**   | `labelTextStyle`, `selectedLabelTextStyle`, `sectionTextStyle`, `badgeTextStyle`, `sectionUppercase` |
 | **Icons**  | `collapseIcon`, `expandIcon`, `searchIcon`, `clearSearchIcon`, `groupTrailingIcon` |
 | **Motion** | `animationDuration`, `animationCurve`, `groupAnimationDuration`, `pressedScale` |
 | **Layout** | `position` (`left` / `right`) |
+
+### Hover activation (web & desktop)
+
+By default everything is driven by clicks. On pointer devices you can let the
+mouse do the work instead, per interaction:
+
+```dart
+DrawerRailTheme(
+  railTrigger: DrawerActivationMode.hover,   // rail expands while hovered
+  groupTrigger: DrawerActivationMode.hover,  // groups & flyouts open on hover
+)
+```
+
+Three things worth knowing:
+
+- **Hover never replaces the click.** Every item stays tappable in every mode,
+  so touch users — where hover events simply never fire — are never locked out.
+- **A hover peek does not change `controller.collapsed`.** Hovering the rail
+  widens the drawer temporarily; the pinned state you persist stays untouched.
+  Read `controller.railCollapsed` when you need the width actually on screen,
+  and keep persisting `collapsed`.
+- **A group you opened by clicking stays open** when the pointer leaves. Only
+  groups that hover itself opened are closed again.
+
+`linkTrigger: DrawerActivationMode.hover` is the sharp one: resting on a link
+for `hoverSelectDelay` runs its `onTap`, navigation included. On a dense menu
+that can move the user somewhere they only meant to pass over. The dwell delay
+makes it unlikely, not impossible — leave it on `click` unless you really want
+pointer-driven navigation.
 
 ### Widget-level customization
 

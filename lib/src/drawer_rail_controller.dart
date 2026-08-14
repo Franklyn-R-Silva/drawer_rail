@@ -34,11 +34,31 @@ class DrawerRailController extends ChangeNotifier {
         _expandedGroups = {...?initiallyExpanded};
 
   bool _collapsed;
+  bool _hoverPeeking = false;
   String? _selectedId;
   final Set<String> _expandedGroups;
 
-  /// Whether the drawer is currently collapsed to the narrow icon rail.
+  /// Whether the drawer is *pinned* collapsed to the narrow icon rail.
+  ///
+  /// This is the durable state — the one to persist. A temporary hover peek
+  /// (see [hoverPeeking]) widens the drawer without changing it, so a user
+  /// brushing past the rail never rewrites their saved preference. Read
+  /// [railCollapsed] if you want to know what is actually on screen.
   bool get collapsed => _collapsed;
+
+  /// Whether the collapsed rail is currently being held open by the mouse
+  /// pointer, with `DrawerRailTheme.railTrigger` set to
+  /// `DrawerActivationMode.hover`.
+  ///
+  /// Transient by nature: do not persist it.
+  bool get hoverPeeking => _hoverPeeking;
+
+  /// Whether the drawer is rendering the narrow icon rail right now — that is,
+  /// [collapsed] and not currently peeked open by hover.
+  ///
+  /// This is the value to use for layout that must line up with the drawer's
+  /// real width.
+  bool get railCollapsed => _collapsed && !_hoverPeeking;
 
   /// The id of the currently selected [DrawerLink], or `null` if none.
   String? get selectedId => _selectedId;
@@ -46,10 +66,26 @@ class DrawerRailController extends ChangeNotifier {
   /// The ids of the [DrawerGroup]s that are currently expanded.
   Set<String> get expandedGroups => Set.unmodifiable(_expandedGroups);
 
-  /// Collapses or expands the drawer. No-op if already in [value].
+  /// Collapses or expands the drawer, pinning the state. No-op if already in
+  /// [value] and not peeking.
+  ///
+  /// An explicit collapse/expand always wins over a hover peek, so any peek in
+  /// flight is dropped here.
   void setCollapsed(bool value) {
-    if (_collapsed == value) return;
+    if (_collapsed == value && !_hoverPeeking) return;
     _collapsed = value;
+    _hoverPeeking = false;
+    notifyListeners();
+  }
+
+  /// Starts or ends a temporary hover peek of the collapsed rail.
+  ///
+  /// Only meaningful while [collapsed] is `true`; it never changes [collapsed]
+  /// itself, so the user's pinned preference survives. No-op if already in
+  /// [value].
+  void setHoverPeek(bool value) {
+    if (_hoverPeeking == value) return;
+    _hoverPeeking = value;
     notifyListeners();
   }
 
@@ -78,6 +114,18 @@ class DrawerRailController extends ChangeNotifier {
     if (!_expandedGroups.remove(id)) {
       _expandedGroups.add(id);
     }
+    notifyListeners();
+  }
+
+  /// Expands ([expanded] `true`) or collapses the group with [id]. No-op if it
+  /// is already in that state.
+  ///
+  /// Unlike [toggleGroup] this is idempotent, which is what hover needs: moving
+  /// the pointer onto an already-open group must not close it.
+  void setGroupExpanded(String id, bool expanded) {
+    final changed =
+        expanded ? _expandedGroups.add(id) : _expandedGroups.remove(id);
+    if (!changed) return;
     notifyListeners();
   }
 }
