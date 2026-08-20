@@ -2,6 +2,62 @@
 
 <!-- Add upcoming changes under a new "## Unreleased" heading. -->
 
+## 0.4.0
+
+### Hover: opening *and* closing
+
+- Add `DrawerRailTheme.hoverAdaptive()`, a one-line preset that makes the drawer
+  pointer-driven: rail and groups switch to hover, `railAutoCollapse` turns on,
+  and `linkTrigger` deliberately stays on `click`. Pass `base:` to layer it over
+  your own styling.
+- Add `DrawerRailTheme.railAutoCollapse` (default `false`) and
+  `hoverAutoCollapseDelay` (default 450ms). With `railTrigger: hover`, leaving
+  the drawer now also closes one the user left *expanded*, making hover
+  symmetric. Off by default because it takes away a panel someone pinned open.
+- Add `DrawerRailController.hoverHidden` and `setHoverHidden`, the mirror of
+  `hoverPeeking`. Like a peek, an auto-collapse never writes `collapsed`, so the
+  state you persist still survives a passing mouse.
+- Fix: a group opened by hover now closes when the panel itself closes, instead
+  of still sitting open the next time the drawer is revealed.
+- Fix: an explicit collapse/expand now also cancels an auto-hide in flight, not
+  just a peek.
+
+### Cursors
+
+- Add `DrawerRailTheme.clickableCursor` (default `SystemMouseCursors.click`) and
+  `inertCursor` (default `SystemMouseCursors.basic`), plus matching parameters
+  on `AnimatedPressCard`. Every clickable surface now *states* its cursor rather
+  than inheriting one, and the drawer's own chrome states the arrow — so the
+  pointer reliably reverts when it leaves an item.
+
+### Motion
+
+- Add `groupAnimationCurve`, `hoverAnimationDuration` and `hoverAnimationCurve`.
+- Fix: the group unfold used a linear height tween, which read as mechanical
+  next to the eased width animation. It and the chevron rotation now follow
+  `groupAnimationCurve`.
+- Fix: the item hover shadow/tint appeared and vanished in a single frame. It
+  now fades over `hoverAnimationDuration`.
+- Fix: hovering a **selected** item replaced its pill color with the drawer
+  surface. An already-opaque background is now kept as the shadow's backing
+  surface, so the pill keeps its color and just lifts.
+- Items now spring back from a press with a slight overshoot instead of easing
+  flatly back to size.
+- Honour `MediaQuery.disableAnimations`: every animation duration collapses to
+  zero when the platform asks for reduced motion. Hover *delays* are kept — they
+  gate an interaction, not a motion effect. `DrawerRailTheme.resolve` takes a
+  new optional `reduceMotion` flag.
+
+### Other
+
+- Add `DrawerRailTheme.copyWith`.
+- The hover-shadow regression helper moved back to matching `AnimatedContainer`,
+  because the card genuinely renders one now. The 0.3.0 note below was correct
+  at the time and is simply no longer true.
+- Rewrite the README: every theme field now documents what it turns on and what
+  visibly moves, and the example app got live switches for **Open on hover** and
+  **Close on exit**.
+
 ## 0.3.0
 
 - Add `DrawerActivationMode` (`click` / `hover`) and three theme fields that

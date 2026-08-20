@@ -80,6 +80,34 @@ void main() {
       expect(controller.railCollapsed, isTrue);
     });
 
+    test('hover hide narrows the panel without touching collapsed', () {
+      final controller = DrawerRailController();
+      addTearDown(controller.dispose);
+
+      controller.setHoverHidden(true);
+      expect(controller.hoverHidden, isTrue);
+      expect(controller.railCollapsed, isTrue, reason: 'hidden by hover');
+      expect(
+        controller.collapsed,
+        isFalse,
+        reason: 'the persisted preference must survive an auto-hide',
+      );
+
+      controller.setHoverHidden(false);
+      expect(controller.railCollapsed, isFalse);
+    });
+
+    test('an explicit expand drops an auto-hide in flight', () {
+      final controller = DrawerRailController();
+      addTearDown(controller.dispose);
+      controller.setHoverHidden(true);
+
+      controller.setCollapsed(false);
+
+      expect(controller.hoverHidden, isFalse);
+      expect(controller.railCollapsed, isFalse);
+    });
+
     test('setGroupExpanded is idempotent', () {
       final controller = DrawerRailController();
       addTearDown(controller.dispose);
@@ -95,6 +123,57 @@ void main() {
       controller.setGroupExpanded('g', false);
       expect(controller.isGroupExpanded('g'), isFalse);
       expect(notifications, 2);
+    });
+  });
+
+  group('DrawerRailTheme', () {
+    test('copyWith replaces only what it is given', () {
+      const base = DrawerRailTheme(expandedWidth: 400, railWidth: 60);
+      final copy = base.copyWith(railWidth: 90);
+
+      expect(copy.railWidth, 90);
+      expect(copy.expandedWidth, 400, reason: 'untouched fields carry over');
+    });
+
+    test('hoverAdaptive turns on rail and group hover but never links', () {
+      final theme = DrawerRailTheme.hoverAdaptive();
+
+      expect(theme.railTrigger, DrawerActivationMode.hover);
+      expect(theme.groupTrigger, DrawerActivationMode.hover);
+      expect(theme.railAutoCollapse, isTrue);
+      expect(
+        theme.linkTrigger,
+        DrawerActivationMode.click,
+        reason: 'navigating on dwell is opt-in only — it is an a11y hazard',
+      );
+    });
+
+    test('hoverAdaptive layers over a base theme', () {
+      final theme = DrawerRailTheme.hoverAdaptive(
+        base: const DrawerRailTheme(hoverEffect: DrawerHoverEffect.highlight),
+        autoCollapse: false,
+      );
+
+      expect(theme.hoverEffect, DrawerHoverEffect.highlight);
+      expect(theme.railTrigger, DrawerActivationMode.hover);
+      expect(theme.railAutoCollapse, isFalse);
+    });
+
+    test('reduceMotion zeroes durations but keeps hover dwell delays', () {
+      const theme = DrawerRailTheme();
+      final resolved = theme.resolve(
+        const ColorScheme.light(),
+        reduceMotion: true,
+      );
+
+      expect(resolved.animationDuration, Duration.zero);
+      expect(resolved.groupAnimationDuration, Duration.zero);
+      expect(resolved.hoverAnimationDuration, Duration.zero);
+      expect(
+        resolved.hoverOpenDelay,
+        const Duration(milliseconds: 120),
+        reason: 'a dwell delay gates an interaction, not a motion effect',
+      );
     });
   });
 
@@ -181,19 +260,21 @@ void main() {
 
     // The unhovered card must never paint a shadow, whichever effect is set —
     // this guards against a shadow bleeding through as a colored haze.
-    // AnimatedPressCard paints into a plain Container, not an AnimatedContainer.
+    // AnimatedPressCard fades its hover decoration in, so that decoration lives
+    // on an AnimatedContainer; matching a plain Container here would find only
+    // the inner padding box and pass vacuously.
     bool anyPressCardHasShadow(WidgetTester tester) {
       final containers = find.descendant(
         of: find.byType(AnimatedPressCard),
-        matching: find.byType(Container),
+        matching: find.byType(AnimatedContainer),
       );
       expect(
         containers,
         findsWidgets,
-        reason: 'no Container under AnimatedPressCard — the check would be '
-            'vacuously true',
+        reason: 'no AnimatedContainer under AnimatedPressCard — the check '
+            'would be vacuously true',
       );
-      for (final c in tester.widgetList<Container>(containers)) {
+      for (final c in tester.widgetList<AnimatedContainer>(containers)) {
         final deco = c.decoration;
         if (deco is BoxDecoration && (deco.boxShadow?.isNotEmpty ?? false)) {
           return true;
@@ -523,6 +604,195 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(controller.selectedId, isNull);
+    });
+
+    testWidgets('railAutoCollapse hides a drawer the user left expanded',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: DrawerRailTheme.hoverAdaptive(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(drawerWidth(tester), 300, reason: 'starts pinned open');
+
+      final gesture = await hoverOver(tester, find.byType(DrawerRail));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(drawerWidth(tester), 300, reason: 'entering keeps it open');
+
+      await gesture.moveTo(const Offset(2000, 2000));
+      await tester.pump(const Duration(milliseconds: 600)); // > 450ms
+      await tester.pumpAndSettle();
+
+      expect(drawerWidth(tester), 76, reason: 'leaving auto-collapses it');
+      expect(
+        controller.collapsed,
+        isFalse,
+        reason: 'an auto-hide must not rewrite the pinned state',
+      );
+      expect(controller.hoverHidden, isTrue);
+
+      // Coming back reveals it again, symmetrically.
+      await gesture.moveTo(tester.getCenter(find.byType(DrawerRail)));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(drawerWidth(tester), 300);
+    });
+
+    testWidgets('railAutoCollapse is off by default, so hover never closes it',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: const DrawerRailTheme(
+              railTrigger: DrawerActivationMode.hover,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final gesture = await hoverOver(tester, find.byType(DrawerRail));
+      await tester.pump(const Duration(milliseconds: 200));
+      await gesture.moveTo(const Offset(2000, 2000));
+      await tester.pump(const Duration(milliseconds: 800));
+      await tester.pumpAndSettle();
+
+      expect(drawerWidth(tester), 300);
+      expect(controller.hoverHidden, isFalse);
+    });
+
+    testWidgets('a group hover opened closes again when the peek ends',
+        (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: groupedEntries(),
+            theme: DrawerRailTheme.hoverAdaptive(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Peek the rail open, then hover the group inside it.
+      final gesture = await hoverOver(tester, find.byType(DrawerRail));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      await gesture.moveTo(tester.getCenter(find.text('Reports')));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(controller.isGroupExpanded('reports'), isTrue);
+
+      await gesture.moveTo(const Offset(2000, 2000));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+
+      expect(drawerWidth(tester), 76);
+      expect(
+        controller.isGroupExpanded('reports'),
+        isFalse,
+        reason: 'it must not still be open the next time the panel is shown',
+      );
+    });
+
+    // ---- Cursors ----------------------------------------------------------
+
+    testWidgets('clickable items get the click cursor, chrome gets basic',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(DrawerRail(controller: controller, entries: entries())),
+      );
+      await tester.pumpAndSettle();
+
+      final inkWells = tester.widgetList<InkWell>(
+        find.descendant(
+          of: find.byType(AnimatedPressCard),
+          matching: find.byType(InkWell),
+        ),
+      );
+      expect(inkWells, isNotEmpty);
+      for (final ink in inkWells) {
+        expect(ink.mouseCursor, SystemMouseCursors.click);
+      }
+
+      // The drawer's own background states the arrow, so the pointer reverts
+      // instead of carrying the hand cursor off an item.
+      final region = tester.widget<MouseRegion>(
+        find
+            .descendant(
+              of: find.byType(DrawerRail),
+              matching: find.byType(MouseRegion),
+            )
+            .first,
+      );
+      expect(region.cursor, SystemMouseCursors.basic);
+    });
+
+    testWidgets('the cursor pair is themeable', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: const DrawerRailTheme(
+              clickableCursor: SystemMouseCursors.grab,
+              inertCursor: SystemMouseCursors.forbidden,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final ink = tester
+          .widgetList<InkWell>(
+            find.descendant(
+              of: find.byType(AnimatedPressCard),
+              matching: find.byType(InkWell),
+            ),
+          )
+          .first;
+      expect(ink.mouseCursor, SystemMouseCursors.grab);
+    });
+
+    // ---- Motion -----------------------------------------------------------
+
+    testWidgets('reduced motion zeroes animation durations', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(disableAnimations: true),
+            child: Scaffold(
+              body: DrawerRail(controller: controller, entries: entries()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final drawer = tester
+          .widgetList<AnimatedContainer>(find.byType(AnimatedContainer))
+          .firstWhere((c) {
+        final deco = c.decoration;
+        return deco is BoxDecoration &&
+            deco.borderRadius is BorderRadius &&
+            (deco.borderRadius! as BorderRadius).topLeft !=
+                (deco.borderRadius! as BorderRadius).topRight;
+      });
+      expect(drawer.duration, Duration.zero);
+
+      // The collapse is then instant rather than a 240ms slide.
+      controller.setCollapsed(true);
+      await tester.pump();
+      expect(drawerWidth(tester), 76);
     });
 
     testWidgets('rounds the left edge when positioned right', (tester) async {
