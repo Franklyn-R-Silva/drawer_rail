@@ -162,15 +162,45 @@ class _DrawerRailState extends State<DrawerRail> {
     _controller.setCollapsed(value);
   }
 
-  /// (A) Pointer entering/leaving the drawer peeks the collapsed rail open.
+  /// (A) Pointer entering/leaving the drawer opens or closes it.
+  ///
+  /// Entering always reveals the panel — either by peeking a pinned-collapsed
+  /// rail or by undoing a previous auto-hide. Leaving reverses whichever of the
+  /// two happened, and with `railAutoCollapse` also hides a drawer the user
+  /// left expanded.
   void _onDrawerHover(bool entered, ResolvedDrawerRailTheme theme) {
     if (theme.railTrigger != DrawerActivationMode.hover) return;
-    if (entered && !_controller.collapsed) return;
-    _peekTimer = _after(
-      _peekTimer,
-      entered ? theme.hoverOpenDelay : theme.hoverCloseDelay,
-      () => _controller.setHoverPeek(entered),
-    );
+    final pinnedOpen = !_controller.collapsed;
+    if (!entered && pinnedOpen && !theme.railAutoCollapse) return;
+
+    // More is at stake when closing a panel the user pinned open, so that exit
+    // waits longer than an ordinary peek's.
+    final delay = entered
+        ? theme.hoverOpenDelay
+        : (pinnedOpen ? theme.hoverAutoCollapseDelay : theme.hoverCloseDelay);
+
+    _peekTimer = _after(_peekTimer, delay, () {
+      if (entered) {
+        _controller.setHoverHidden(false);
+        if (_controller.collapsed) _controller.setHoverPeek(true);
+        return;
+      }
+      _controller.setHoverPeek(false);
+      if (pinnedOpen) _controller.setHoverHidden(true);
+      // A group hover opened inside the panel must not still be sitting open
+      // the next time it is revealed.
+      _closeHoverOpenedGroup();
+    });
+  }
+
+  /// Closes the group hover opened, if any, and forgets it. A group the user
+  /// clicked open is left alone.
+  void _closeHoverOpenedGroup() {
+    final id = _hoverOpenedGroupId;
+    if (id == null) return;
+    _hoverOpenedGroupId = null;
+    _groupTimer?.cancel();
+    _controller.setGroupExpanded(id, false);
   }
 
   /// (C) Pointer entering/leaving an inline group in the expanded panel.
@@ -247,7 +277,12 @@ class _DrawerRailState extends State<DrawerRail> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final theme = widget.theme.resolve(scheme);
+    // Honour the platform's "reduce motion" setting: durations collapse to
+    // zero, so the drawer snaps rather than slides.
+    final theme = widget.theme.resolve(
+      scheme,
+      reduceMotion: MediaQuery.disableAnimationsOf(context),
+    );
 
     return AnimatedBuilder(
       animation: _controller,
@@ -258,6 +293,10 @@ class _DrawerRailState extends State<DrawerRail> {
         final width = collapsed ? theme.railWidth : theme.expandedWidth;
 
         return MouseRegion(
+          // The drawer's own chrome is inert, so the pointer reverts to an
+          // arrow the moment it leaves an item instead of carrying the hand
+          // cursor across the background.
+          cursor: theme.inertCursor,
           onEnter: (_) => _onDrawerHover(true, theme),
           onExit: (_) => _onDrawerHover(false, theme),
           child: AnimatedContainer(
@@ -500,6 +539,10 @@ class _DrawerRailState extends State<DrawerRail> {
           hoverEffect: theme.hoverEffect,
           hoverShadowColor: theme.hoverShadowColor,
           hoverHighlightColor: theme.hoverHighlightColor,
+          hoverAnimationDuration: theme.hoverAnimationDuration,
+          hoverAnimationCurve: theme.hoverAnimationCurve,
+          clickableCursor: theme.clickableCursor,
+          inertCursor: theme.inertCursor,
           surfaceColor: theme.backgroundColor,
           baseColor: isSelected ? theme.selectedColor : Colors.transparent,
           borderRadius:
@@ -551,6 +594,10 @@ class _DrawerRailState extends State<DrawerRail> {
               hoverEffect: theme.hoverEffect,
               hoverShadowColor: theme.hoverShadowColor,
               hoverHighlightColor: theme.hoverHighlightColor,
+              hoverAnimationDuration: theme.hoverAnimationDuration,
+              hoverAnimationCurve: theme.hoverAnimationCurve,
+              clickableCursor: theme.clickableCursor,
+              inertCursor: theme.inertCursor,
               surfaceColor: theme.backgroundColor,
               baseColor: Colors.transparent,
               borderRadius:
@@ -579,6 +626,7 @@ class _DrawerRailState extends State<DrawerRail> {
                     AnimatedRotation(
                       turns: open ? 0.5 : 0,
                       duration: theme.groupAnimationDuration,
+                      curve: theme.groupAnimationCurve,
                       child: Icon(
                         theme.groupTrailingIcon,
                         color: theme.surfaceVariantColor,
@@ -600,6 +648,11 @@ class _DrawerRailState extends State<DrawerRail> {
             crossFadeState:
                 open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
             duration: theme.groupAnimationDuration,
+            // Without these the reveal defaults to a linear height tween, which
+            // reads as mechanical next to the eased width animation.
+            sizeCurve: theme.groupAnimationCurve,
+            firstCurve: theme.groupAnimationCurve,
+            secondCurve: theme.groupAnimationCurve,
           ),
         ],
       ),
@@ -664,6 +717,9 @@ class _DrawerRailState extends State<DrawerRail> {
             onEnter: (_) => _onMenuHover(true, menu, theme),
             onExit: (_) => _onMenuHover(false, menu, theme),
             child: MenuItemButton(
+              style: ButtonStyle(
+                mouseCursor: WidgetStatePropertyAll(theme.clickableCursor),
+              ),
               leadingIcon: Icon(
                 child.icon,
                 size: theme.iconSize,
@@ -766,6 +822,10 @@ class _RailButton extends StatelessWidget {
           hoverEffect: theme.hoverEffect,
           hoverShadowColor: theme.hoverShadowColor,
           hoverHighlightColor: theme.hoverHighlightColor,
+          hoverAnimationDuration: theme.hoverAnimationDuration,
+          hoverAnimationCurve: theme.hoverAnimationCurve,
+          clickableCursor: theme.clickableCursor,
+          inertCursor: theme.inertCursor,
           surfaceColor: theme.backgroundColor,
           baseColor: selected ? theme.selectedColor : Colors.transparent,
           borderRadius:

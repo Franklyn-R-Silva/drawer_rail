@@ -69,6 +69,14 @@ class _HomePageState extends State<HomePage> {
   /// Toggles between the default left drawer and a fully custom right one.
   bool _customRight = false;
 
+  /// Whether the pointer drives the drawer: hovering the rail expands it and
+  /// hovering a group opens it, with no click needed.
+  bool _hoverDriven = true;
+
+  /// Whether leaving the drawer with the pointer also closes a drawer that was
+  /// left expanded — the other half of "opens and closes by itself".
+  bool _autoCollapse = true;
+
   @override
   void dispose() {
     _controller.dispose();
@@ -92,11 +100,8 @@ class _HomePageState extends State<HomePage> {
     pressedScale: 0.95,
     // Use a flat background highlight on hover instead of the default shadow.
     hoverEffect: DrawerHoverEffect.highlight,
-    // Pointer-driven navigation, for web/desktop: the rail peeks open while
-    // hovered and groups open without a click. Links stay on click — hovering
-    // one would navigate. Tapping keeps working everywhere, so touch is fine.
-    railTrigger: DrawerActivationMode.hover,
-    groupTrigger: DrawerActivationMode.hover,
+    // Snappier hover feedback than the 160ms default.
+    hoverAnimationDuration: Duration(milliseconds: 120),
     sectionUppercase: false,
     selectedColor: Color(0xFF10B981),
     onSelectedColor: Colors.white,
@@ -109,10 +114,24 @@ class _HomePageState extends State<HomePage> {
     expandIcon: Icons.chevron_left_rounded,
     groupTrailingIcon: Icons.expand_more_rounded,
     groupAnimationDuration: Duration(milliseconds: 260),
+    // A little overshoot as a group unfolds, instead of the default ease-out.
+    groupAnimationCurve: Curves.easeOutBack,
   );
 
-  DrawerRailTheme get _theme =>
-      _customRight ? _rightTheme : const DrawerRailTheme();
+  /// Layers the pointer behavior on top of whichever look is selected.
+  ///
+  /// `hoverAdaptive` is the one-line way to make the drawer pointer-driven:
+  /// it switches the rail and groups to hover and leaves links on click, since
+  /// navigating because the pointer paused somewhere is hostile. `copyWith`
+  /// keeps everything else from the base theme untouched.
+  DrawerRailTheme get _theme {
+    final base = _customRight ? _rightTheme : const DrawerRailTheme();
+    if (!_hoverDriven) return base;
+    return DrawerRailTheme.hoverAdaptive(
+      base: base,
+      autoCollapse: _autoCollapse,
+    );
+  }
 
   List<DrawerEntry> get _entries => [
         const DrawerSection('Main'),
@@ -266,31 +285,78 @@ class _HomePageState extends State<HomePage> {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                _title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 24),
-              // Scale the button down if the content area is too narrow (e.g.
-              // on a phone where the expanded drawer leaves little room), so it
-              // never overflows.
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: FilledButton.tonalIcon(
-                  onPressed: () => setState(() => _customRight = !_customRight),
-                  icon: const Icon(Icons.swap_horiz_rounded),
-                  label: Text(
-                    _customRight
-                        ? 'Default drawer (left)'
-                        : 'Custom drawer (right)',
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _title,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 24),
+                // Scale the button down if the content area is too narrow (e.g.
+                // on a phone where the expanded drawer leaves little room), so
+                // it never overflows.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: FilledButton.tonalIcon(
+                    onPressed: () =>
+                        setState(() => _customRight = !_customRight),
+                    icon: const Icon(Icons.swap_horiz_rounded),
+                    label: Text(
+                      _customRight
+                          ? 'Default drawer (left)'
+                          : 'Custom drawer (right)',
+                    ),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 24),
+                // Flip the pointer behavior live, so the difference between
+                // click-driven and hover-driven is something you can feel
+                // rather than read about.
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Card(
+                    margin: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        SwitchListTile(
+                          value: _hoverDriven,
+                          onChanged: (v) => setState(() => _hoverDriven = v),
+                          title: const Text('Open on hover'),
+                          subtitle: const Text(
+                            'The rail expands and groups open when the pointer '
+                            'rests on them. Clicking still works.',
+                          ),
+                        ),
+                        SwitchListTile(
+                          value: _autoCollapse,
+                          // Only meaningful while hover drives the drawer.
+                          onChanged: _hoverDriven
+                              ? (v) => setState(() => _autoCollapse = v)
+                              : null,
+                          title: const Text('Close on exit'),
+                          subtitle: const Text(
+                            'Leaving the drawer also collapses one you left '
+                            'expanded, without rewriting the pinned state.',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Tip: the collapse button always wins — click it and the '
+                  'drawer stays where you put it until you hover away again.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

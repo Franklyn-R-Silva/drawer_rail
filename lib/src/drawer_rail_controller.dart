@@ -35,15 +35,17 @@ class DrawerRailController extends ChangeNotifier {
 
   bool _collapsed;
   bool _hoverPeeking = false;
+  bool _hoverHidden = false;
   String? _selectedId;
   final Set<String> _expandedGroups;
 
   /// Whether the drawer is *pinned* collapsed to the narrow icon rail.
   ///
-  /// This is the durable state — the one to persist. A temporary hover peek
-  /// (see [hoverPeeking]) widens the drawer without changing it, so a user
-  /// brushing past the rail never rewrites their saved preference. Read
-  /// [railCollapsed] if you want to know what is actually on screen.
+  /// This is the durable state — the one to persist. Hover never writes it: a
+  /// peek ([hoverPeeking]) widens the drawer and an auto-hide ([hoverHidden])
+  /// narrows it, both without changing this value, so a user brushing past the
+  /// drawer never rewrites their saved preference. Read [railCollapsed] if you
+  /// want to know what is actually on screen.
   bool get collapsed => _collapsed;
 
   /// Whether the collapsed rail is currently being held open by the mouse
@@ -53,12 +55,22 @@ class DrawerRailController extends ChangeNotifier {
   /// Transient by nature: do not persist it.
   bool get hoverPeeking => _hoverPeeking;
 
+  /// Whether the collapsed rail is currently being held *shut* by the pointer
+  /// having left the drawer, with `DrawerRailTheme.railAutoCollapse` on.
+  ///
+  /// The mirror image of [hoverPeeking]: where a peek widens a pinned-collapsed
+  /// drawer, this narrows a pinned-expanded one — again without touching
+  /// [collapsed], so the user's saved preference survives either way.
+  ///
+  /// Transient by nature: do not persist it.
+  bool get hoverHidden => _hoverHidden;
+
   /// Whether the drawer is rendering the narrow icon rail right now — that is,
-  /// [collapsed] and not currently peeked open by hover.
+  /// either hidden by hover, or [collapsed] and not currently peeked open.
   ///
   /// This is the value to use for layout that must line up with the drawer's
   /// real width.
-  bool get railCollapsed => _collapsed && !_hoverPeeking;
+  bool get railCollapsed => _hoverHidden || (_collapsed && !_hoverPeeking);
 
   /// The id of the currently selected [DrawerLink], or `null` if none.
   String? get selectedId => _selectedId;
@@ -69,12 +81,13 @@ class DrawerRailController extends ChangeNotifier {
   /// Collapses or expands the drawer, pinning the state. No-op if already in
   /// [value] and not peeking.
   ///
-  /// An explicit collapse/expand always wins over a hover peek, so any peek in
-  /// flight is dropped here.
+  /// An explicit collapse/expand always wins over hover, so a peek or an
+  /// auto-hide in flight is dropped here.
   void setCollapsed(bool value) {
-    if (_collapsed == value && !_hoverPeeking) return;
+    if (_collapsed == value && !_hoverPeeking && !_hoverHidden) return;
     _collapsed = value;
     _hoverPeeking = false;
+    _hoverHidden = false;
     notifyListeners();
   }
 
@@ -89,7 +102,21 @@ class DrawerRailController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Starts or ends a temporary hover-driven hide of the expanded panel.
+  ///
+  /// Only meaningful while [collapsed] is `false`; like [setHoverPeek] it never
+  /// changes [collapsed] itself. No-op if already in [value].
+  void setHoverHidden(bool value) {
+    if (_hoverHidden == value) return;
+    _hoverHidden = value;
+    notifyListeners();
+  }
+
   /// Toggles between the expanded panel and the collapsed rail.
+  ///
+  /// Toggles the *pinned* state, so a drawer currently hidden or peeked by
+  /// hover resolves to the opposite of what the user pinned, not of what is on
+  /// screen.
   void toggleCollapsed() => setCollapsed(!_collapsed);
 
   /// Marks the entry with [id] as selected. No-op if already selected.

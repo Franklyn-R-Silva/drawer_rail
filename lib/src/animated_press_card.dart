@@ -21,6 +21,10 @@ class AnimatedPressCard extends StatefulWidget {
     this.hoverHighlightColor,
     this.surfaceColor,
     this.baseColor,
+    this.hoverAnimationDuration = const Duration(milliseconds: 160),
+    this.hoverAnimationCurve = Curves.easeOut,
+    this.clickableCursor = SystemMouseCursors.click,
+    this.inertCursor = SystemMouseCursors.basic,
   });
 
   /// The content of the card.
@@ -57,6 +61,23 @@ class AnimatedPressCard extends StatefulWidget {
   /// The base background color of the card.
   final Color? baseColor;
 
+  /// How long the hover shadow/tint takes to fade in and out. Defaults to
+  /// 160ms. Set to [Duration.zero] to snap, which is what the drawer does when
+  /// the platform asks for reduced motion.
+  final Duration hoverAnimationDuration;
+
+  /// The curve of the hover fade. Defaults to [Curves.easeOut].
+  final Curve hoverAnimationCurve;
+
+  /// The cursor shown while the card is interactive, i.e. [onTap] is non-null.
+  /// Defaults to [SystemMouseCursors.click].
+  final MouseCursor clickableCursor;
+
+  /// The cursor shown while the card is inert, i.e. [onTap] is `null`. Defaults
+  /// to [SystemMouseCursors.basic], so the pointer reverts instead of keeping
+  /// the click cursor from a neighbouring item.
+  final MouseCursor inertCursor;
+
   @override
   State<AnimatedPressCard> createState() => _AnimatedPressCardState();
 }
@@ -75,7 +96,13 @@ class _AnimatedPressCardState extends State<AnimatedPressCard>
       duration: const Duration(milliseconds: 140),
     );
     _scale = Tween<double>(begin: 1, end: widget.pressedScale).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      CurvedAnimation(
+        parent: _controller,
+        // Press in crisply, release with a slight overshoot so the item springs
+        // back to size instead of easing flatly into it.
+        curve: Curves.easeOut,
+        reverseCurve: Curves.easeOutBack,
+      ),
     );
   }
 
@@ -101,33 +128,37 @@ class _AnimatedPressCardState extends State<AnimatedPressCard>
   Widget build(BuildContext context) {
     final active = widget.onTap != null;
     final scheme = Theme.of(context).colorScheme;
+    final base = widget.baseColor ?? Colors.transparent;
+    final lifted =
+        active && _hovered && widget.hoverEffect == DrawerHoverEffect.shadow;
 
-    BoxDecoration decoration;
-    if (active && _hovered && widget.hoverEffect == DrawerHoverEffect.shadow) {
-      decoration = BoxDecoration(
-        borderRadius: widget.borderRadius,
-        color: widget.surfaceColor ?? scheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: widget.hoverShadowColor ??
-                scheme.primary.withValues(alpha: 0.12),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      );
-    } else {
-      decoration = BoxDecoration(
-        borderRadius: widget.borderRadius,
-        color: widget.baseColor ?? Colors.transparent,
-      );
-    }
+    // A shadow needs something opaque to sit under, or it bleeds through the
+    // (usually transparent) child as a colored haze. An already-opaque base —
+    // the selected pill — is that surface, so keep it and it no longer loses
+    // its color the moment the pointer arrives.
+    final BoxDecoration decoration = BoxDecoration(
+      borderRadius: widget.borderRadius,
+      color:
+          lifted && base.a < 1 ? (widget.surfaceColor ?? scheme.surface) : base,
+      boxShadow: lifted
+          ? [
+              BoxShadow(
+                color: widget.hoverShadowColor ??
+                    scheme.primary.withValues(alpha: 0.12),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ]
+          : null,
+    );
 
     return AnimatedBuilder(
       animation: _scale,
       builder: (context, child) => Transform.scale(
         scale: _scale.value,
-        child: Container(
+        child: AnimatedContainer(
+          duration: widget.hoverAnimationDuration,
+          curve: widget.hoverAnimationCurve,
           decoration: decoration,
           child: Material(
             type: MaterialType.transparency,
@@ -138,6 +169,10 @@ class _AnimatedPressCardState extends State<AnimatedPressCard>
               onTapDown: _onTapDown,
               onTapUp: _onTapUp,
               onTapCancel: _onTapCancel,
+              // Stated rather than inherited, so the pointer is guaranteed to
+              // become a hand over anything tappable and to revert over
+              // anything that is not.
+              mouseCursor: active ? widget.clickableCursor : widget.inertCursor,
               onHover: (isHovering) {
                 setState(() => _hovered = isHovering);
               },

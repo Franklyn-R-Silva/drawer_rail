@@ -60,6 +60,9 @@ class DrawerRailTheme {
     this.animationDuration = const Duration(milliseconds: 240),
     this.animationCurve = Curves.easeOutCubic,
     this.groupAnimationDuration = const Duration(milliseconds: 200),
+    this.groupAnimationCurve = Curves.easeOutCubic,
+    this.hoverAnimationDuration = const Duration(milliseconds: 160),
+    this.hoverAnimationCurve = Curves.easeOut,
     this.iconSize = 20,
     this.railIconSize = 22,
     this.railItemHeight = 44,
@@ -85,9 +88,13 @@ class DrawerRailTheme {
     this.railTrigger = DrawerActivationMode.click,
     this.groupTrigger = DrawerActivationMode.click,
     this.linkTrigger = DrawerActivationMode.click,
+    this.railAutoCollapse = false,
     this.hoverOpenDelay = const Duration(milliseconds: 120),
     this.hoverCloseDelay = const Duration(milliseconds: 220),
     this.hoverSelectDelay = const Duration(milliseconds: 300),
+    this.hoverAutoCollapseDelay = const Duration(milliseconds: 450),
+    this.clickableCursor = SystemMouseCursors.click,
+    this.inertCursor = SystemMouseCursors.basic,
     this.shadow,
     this.labelTextStyle,
     this.selectedLabelTextStyle,
@@ -124,6 +131,17 @@ class DrawerRailTheme {
 
   /// How long a group takes to expand/collapse and its chevron to rotate.
   final Duration groupAnimationDuration;
+
+  /// The curve of the group expand/collapse reveal and its chevron rotation.
+  /// Defaults to [Curves.easeOutCubic].
+  final Curve groupAnimationCurve;
+
+  /// How long an item's hover feedback (the shadow lift or background tint)
+  /// takes to fade in and out. Defaults to 160ms.
+  final Duration hoverAnimationDuration;
+
+  /// The curve of the hover feedback fade. Defaults to [Curves.easeOut].
+  final Curve hoverAnimationCurve;
 
   /// The size of item icons in the expanded panel. Defaults to `20`.
   final double iconSize;
@@ -207,6 +225,9 @@ class DrawerRailTheme {
   /// not change the pinned [DrawerRailController.collapsed] state. The
   /// collapse/expand button keeps working and pins the state. Defaults to
   /// [DrawerActivationMode.click].
+  ///
+  /// A peek only ever widens a *collapsed* rail. To also close a drawer the
+  /// user left expanded when the pointer leaves, set [railAutoCollapse].
   final DrawerActivationMode railTrigger;
 
   /// How a [DrawerGroup] opens, both as a flyout in the collapsed rail and
@@ -238,6 +259,33 @@ class DrawerRailTheme {
   /// it. Deliberately longer than [hoverOpenDelay] because the action
   /// navigates. Defaults to 300ms.
   final Duration hoverSelectDelay;
+
+  /// Whether leaving the drawer with the pointer also collapses a drawer the
+  /// user left *expanded*, not just one peeked open from the rail.
+  ///
+  /// Only has an effect when [railTrigger] is [DrawerActivationMode.hover].
+  /// This makes hover symmetric — the drawer opens on enter and closes on exit
+  /// — at the cost of taking away a panel the user deliberately pinned open, so
+  /// it is opt-in and defaults to `false`. An explicit click on the
+  /// collapse/expand button always re-pins the state and wins over hover.
+  ///
+  /// The close runs after [hoverAutoCollapseDelay], which is longer than
+  /// [hoverCloseDelay] precisely because more is at stake.
+  final bool railAutoCollapse;
+
+  /// How long after the pointer leaves before [railAutoCollapse] collapses a
+  /// pinned-open drawer. Deliberately longer than [hoverCloseDelay] so brushing
+  /// past the drawer does not close it. Defaults to 450ms.
+  final Duration hoverAutoCollapseDelay;
+
+  /// The cursor shown over anything clickable: links, group headers, rail
+  /// buttons and flyout items. Defaults to [SystemMouseCursors.click].
+  final MouseCursor clickableCursor;
+
+  /// The cursor shown over the drawer's non-interactive chrome — section
+  /// headers, dividers and the background — so the pointer reliably reverts
+  /// after leaving a clickable item. Defaults to [SystemMouseCursors.basic].
+  final MouseCursor inertCursor;
 
   /// The shadow cast by the drawer. Defaults to a soft shadow on the outer
   /// edge (see [position]).
@@ -272,9 +320,177 @@ class DrawerRailTheme {
   /// The trailing chevron of an expandable group in the expanded panel.
   final IconData groupTrailingIcon;
 
+  /// A ready-made preset for pointer-driven apps: the rail expands when the
+  /// mouse enters it and collapses again when the pointer leaves, and groups
+  /// open on hover too.
+  ///
+  /// [linkTrigger] is deliberately *not* switched to hover — navigating because
+  /// the pointer paused over a link is hostile, and impossible to undo with the
+  /// keyboard. Opt into it explicitly on [base] if you really want it.
+  ///
+  /// Layer it over your own styling by passing [base]:
+  ///
+  /// ```dart
+  /// DrawerRail(
+  ///   theme: DrawerRailTheme.hoverAdaptive(
+  ///     base: const DrawerRailTheme(hoverEffect: DrawerHoverEffect.highlight),
+  ///   ),
+  ///   // ...
+  /// );
+  /// ```
+  ///
+  /// Touch devices never fire hover events, so the click path stays the only
+  /// one that runs there — the preset is safe to use unconditionally.
+  factory DrawerRailTheme.hoverAdaptive({
+    DrawerRailTheme base = const DrawerRailTheme(),
+    bool autoCollapse = true,
+    Duration? openDelay,
+    Duration? closeDelay,
+    Duration? autoCollapseDelay,
+  }) {
+    return base.copyWith(
+      railTrigger: DrawerActivationMode.hover,
+      groupTrigger: DrawerActivationMode.hover,
+      railAutoCollapse: autoCollapse,
+      hoverOpenDelay: openDelay,
+      hoverCloseDelay: closeDelay,
+      hoverAutoCollapseDelay: autoCollapseDelay,
+    );
+  }
+
+  /// Returns a copy of this theme with the given fields replaced.
+  ///
+  /// Passing `null` for a field keeps the current value; it never resets one
+  /// back to "derive from the [ColorScheme]" — construct a new
+  /// [DrawerRailTheme] for that.
+  DrawerRailTheme copyWith({
+    double? expandedWidth,
+    double? railWidth,
+    double? borderRadius,
+    double? itemBorderRadius,
+    DrawerRailPosition? position,
+    Duration? animationDuration,
+    Curve? animationCurve,
+    Duration? groupAnimationDuration,
+    Curve? groupAnimationCurve,
+    Duration? hoverAnimationDuration,
+    Curve? hoverAnimationCurve,
+    double? iconSize,
+    double? railIconSize,
+    double? railItemHeight,
+    double? pressedScale,
+    bool? sectionUppercase,
+    EdgeInsetsGeometry? contentPadding,
+    EdgeInsetsGeometry? itemPadding,
+    double? groupChildIndent,
+    Color? backgroundColor,
+    Color? selectedColor,
+    Color? onSelectedColor,
+    Color? iconColor,
+    Color? labelColor,
+    Color? sectionColor,
+    Color? badgeTextColor,
+    Color? badgeCountColor,
+    Color? menuBackgroundColor,
+    Color? searchFillColor,
+    DrawerHoverEffect? hoverEffect,
+    Color? hoverShadowColor,
+    Color? hoverHighlightColor,
+    DrawerActivationMode? railTrigger,
+    DrawerActivationMode? groupTrigger,
+    DrawerActivationMode? linkTrigger,
+    bool? railAutoCollapse,
+    Duration? hoverOpenDelay,
+    Duration? hoverCloseDelay,
+    Duration? hoverSelectDelay,
+    Duration? hoverAutoCollapseDelay,
+    MouseCursor? clickableCursor,
+    MouseCursor? inertCursor,
+    List<BoxShadow>? shadow,
+    TextStyle? labelTextStyle,
+    TextStyle? selectedLabelTextStyle,
+    TextStyle? sectionTextStyle,
+    TextStyle? badgeTextStyle,
+    IconData? collapseIcon,
+    IconData? expandIcon,
+    IconData? searchIcon,
+    IconData? clearSearchIcon,
+    IconData? groupTrailingIcon,
+  }) {
+    return DrawerRailTheme(
+      expandedWidth: expandedWidth ?? this.expandedWidth,
+      railWidth: railWidth ?? this.railWidth,
+      borderRadius: borderRadius ?? this.borderRadius,
+      itemBorderRadius: itemBorderRadius ?? this.itemBorderRadius,
+      position: position ?? this.position,
+      animationDuration: animationDuration ?? this.animationDuration,
+      animationCurve: animationCurve ?? this.animationCurve,
+      groupAnimationDuration:
+          groupAnimationDuration ?? this.groupAnimationDuration,
+      groupAnimationCurve: groupAnimationCurve ?? this.groupAnimationCurve,
+      hoverAnimationDuration:
+          hoverAnimationDuration ?? this.hoverAnimationDuration,
+      hoverAnimationCurve: hoverAnimationCurve ?? this.hoverAnimationCurve,
+      iconSize: iconSize ?? this.iconSize,
+      railIconSize: railIconSize ?? this.railIconSize,
+      railItemHeight: railItemHeight ?? this.railItemHeight,
+      pressedScale: pressedScale ?? this.pressedScale,
+      sectionUppercase: sectionUppercase ?? this.sectionUppercase,
+      contentPadding: contentPadding ?? this.contentPadding,
+      itemPadding: itemPadding ?? this.itemPadding,
+      groupChildIndent: groupChildIndent ?? this.groupChildIndent,
+      backgroundColor: backgroundColor ?? this.backgroundColor,
+      selectedColor: selectedColor ?? this.selectedColor,
+      onSelectedColor: onSelectedColor ?? this.onSelectedColor,
+      iconColor: iconColor ?? this.iconColor,
+      labelColor: labelColor ?? this.labelColor,
+      sectionColor: sectionColor ?? this.sectionColor,
+      badgeTextColor: badgeTextColor ?? this.badgeTextColor,
+      badgeCountColor: badgeCountColor ?? this.badgeCountColor,
+      menuBackgroundColor: menuBackgroundColor ?? this.menuBackgroundColor,
+      searchFillColor: searchFillColor ?? this.searchFillColor,
+      hoverEffect: hoverEffect ?? this.hoverEffect,
+      hoverShadowColor: hoverShadowColor ?? this.hoverShadowColor,
+      hoverHighlightColor: hoverHighlightColor ?? this.hoverHighlightColor,
+      railTrigger: railTrigger ?? this.railTrigger,
+      groupTrigger: groupTrigger ?? this.groupTrigger,
+      linkTrigger: linkTrigger ?? this.linkTrigger,
+      railAutoCollapse: railAutoCollapse ?? this.railAutoCollapse,
+      hoverOpenDelay: hoverOpenDelay ?? this.hoverOpenDelay,
+      hoverCloseDelay: hoverCloseDelay ?? this.hoverCloseDelay,
+      hoverSelectDelay: hoverSelectDelay ?? this.hoverSelectDelay,
+      hoverAutoCollapseDelay:
+          hoverAutoCollapseDelay ?? this.hoverAutoCollapseDelay,
+      clickableCursor: clickableCursor ?? this.clickableCursor,
+      inertCursor: inertCursor ?? this.inertCursor,
+      shadow: shadow ?? this.shadow,
+      labelTextStyle: labelTextStyle ?? this.labelTextStyle,
+      selectedLabelTextStyle:
+          selectedLabelTextStyle ?? this.selectedLabelTextStyle,
+      sectionTextStyle: sectionTextStyle ?? this.sectionTextStyle,
+      badgeTextStyle: badgeTextStyle ?? this.badgeTextStyle,
+      collapseIcon: collapseIcon ?? this.collapseIcon,
+      expandIcon: expandIcon ?? this.expandIcon,
+      searchIcon: searchIcon ?? this.searchIcon,
+      clearSearchIcon: clearSearchIcon ?? this.clearSearchIcon,
+      groupTrailingIcon: groupTrailingIcon ?? this.groupTrailingIcon,
+    );
+  }
+
   /// Returns a copy of this theme resolved against [scheme], filling every
   /// nullable value with its default so the widgets can read non-null values.
-  ResolvedDrawerRailTheme resolve(ColorScheme scheme) {
+  ///
+  /// When [reduceMotion] is `true` — normally from
+  /// [MediaQuery.disableAnimationsOf] — every animation *duration* collapses to
+  /// [Duration.zero] so the drawer snaps between states instead of sliding.
+  /// Hover dwell delays are deliberately left alone: they gate an interaction,
+  /// not a motion effect, and zeroing them would make the drawer fire on the
+  /// slightest pointer movement.
+  ResolvedDrawerRailTheme resolve(
+    ColorScheme scheme, {
+    bool reduceMotion = false,
+  }) {
+    Duration motion(Duration d) => reduceMotion ? Duration.zero : d;
     final resolvedSelected = selectedColor ?? scheme.primary;
     final resolvedOnSelected = onSelectedColor ?? scheme.onPrimary;
     final resolvedLabel = labelColor ?? scheme.onSurface;
@@ -289,9 +505,12 @@ class DrawerRailTheme {
       borderRadius: borderRadius,
       itemBorderRadius: itemBorderRadius,
       position: position,
-      animationDuration: animationDuration,
+      animationDuration: motion(animationDuration),
       animationCurve: animationCurve,
-      groupAnimationDuration: groupAnimationDuration,
+      groupAnimationDuration: motion(groupAnimationDuration),
+      groupAnimationCurve: groupAnimationCurve,
+      hoverAnimationDuration: motion(hoverAnimationDuration),
+      hoverAnimationCurve: hoverAnimationCurve,
       iconSize: iconSize,
       railIconSize: railIconSize,
       railItemHeight: railItemHeight,
@@ -322,9 +541,13 @@ class DrawerRailTheme {
       railTrigger: railTrigger,
       groupTrigger: groupTrigger,
       linkTrigger: linkTrigger,
+      railAutoCollapse: railAutoCollapse,
       hoverOpenDelay: hoverOpenDelay,
       hoverCloseDelay: hoverCloseDelay,
       hoverSelectDelay: hoverSelectDelay,
+      hoverAutoCollapseDelay: hoverAutoCollapseDelay,
+      clickableCursor: clickableCursor,
+      inertCursor: inertCursor,
       labelTextStyle: baseLabel,
       selectedLabelTextStyle: selectedLabelTextStyle ?? baseLabel,
       sectionTextStyle: (sectionTextStyle ??
@@ -369,6 +592,9 @@ class ResolvedDrawerRailTheme {
     required this.animationDuration,
     required this.animationCurve,
     required this.groupAnimationDuration,
+    required this.groupAnimationCurve,
+    required this.hoverAnimationDuration,
+    required this.hoverAnimationCurve,
     required this.iconSize,
     required this.railIconSize,
     required this.railItemHeight,
@@ -397,9 +623,13 @@ class ResolvedDrawerRailTheme {
     required this.railTrigger,
     required this.groupTrigger,
     required this.linkTrigger,
+    required this.railAutoCollapse,
     required this.hoverOpenDelay,
     required this.hoverCloseDelay,
     required this.hoverSelectDelay,
+    required this.hoverAutoCollapseDelay,
+    required this.clickableCursor,
+    required this.inertCursor,
     required this.labelTextStyle,
     required this.selectedLabelTextStyle,
     required this.sectionTextStyle,
@@ -435,6 +665,15 @@ class ResolvedDrawerRailTheme {
 
   /// See [DrawerRailTheme.groupAnimationDuration].
   final Duration groupAnimationDuration;
+
+  /// See [DrawerRailTheme.groupAnimationCurve].
+  final Curve groupAnimationCurve;
+
+  /// See [DrawerRailTheme.hoverAnimationDuration].
+  final Duration hoverAnimationDuration;
+
+  /// See [DrawerRailTheme.hoverAnimationCurve].
+  final Curve hoverAnimationCurve;
 
   /// See [DrawerRailTheme.iconSize].
   final double iconSize;
@@ -528,6 +767,18 @@ class ResolvedDrawerRailTheme {
 
   /// See [DrawerRailTheme.hoverSelectDelay].
   final Duration hoverSelectDelay;
+
+  /// See [DrawerRailTheme.railAutoCollapse].
+  final bool railAutoCollapse;
+
+  /// See [DrawerRailTheme.hoverAutoCollapseDelay].
+  final Duration hoverAutoCollapseDelay;
+
+  /// See [DrawerRailTheme.clickableCursor].
+  final MouseCursor clickableCursor;
+
+  /// See [DrawerRailTheme.inertCursor].
+  final MouseCursor inertCursor;
 
   /// The resolved base label style (color applied per state).
   final TextStyle labelTextStyle;
