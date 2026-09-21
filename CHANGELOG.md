@@ -2,6 +2,81 @@
 
 <!-- Add upcoming changes under a new "## Unreleased" heading. -->
 
+## 0.5.0
+
+A bug-hunting release: everything below except the new API was found by reading
+the widget back against what its own comments claimed it did, then written up as
+a failing test first. The suite grew from 36 tests to 52.
+
+### Hover, when the pointer keeps moving
+
+- **Fix: sweeping from one group to the next stranded the first one open.** All
+  groups shared a single timer, so entering the second group cancelled the
+  pending close of the one just left — and it then stayed open for good, since
+  the bookkeeping had already moved on. Each group now keeps its own timer.
+- **Fix: in the collapsed rail, the same bug meant the next flyout never opened
+  at all** — the shared timer resolved to the wrong action. Rail flyouts now
+  swap cleanly, and only one is ever open at a time.
+- **Fix: a rail flyout opened straight over the buttons below it**, so the group
+  underneath an open one could not be reached — fatal with `groupTrigger:
+  hover`, where the pointer has to travel through the overlay to get anywhere.
+  Flyouts now open *beside* the rail, and mirror correctly with
+  `position: right`.
+- **Fix: a drawer torn down mid-peek left `hoverPeeking` stuck on**, so a
+  controller outliving the drawer reported the wrong `railCollapsed` from then
+  on. `DrawerRail` now hands the controller back clean.
+- **Fix: a group with no children opened an empty flyout.** It now opens
+  nothing.
+
+### Layout
+
+- **Fix: the content slid sideways for the whole collapse/expand animation.**
+  The `OverflowBox` meant to lay the content out at its target width inherited
+  the animating container's tight `minWidth` as a floor, so it never did — the
+  content was laid out at the animating width and centred instead. It is now
+  anchored against the edge that does not move, so the rail is *revealed*
+  rather than squeezed: no re-wrapping, no mid-animation ellipsis, no drift.
+  With `position: right` the anchor flips with it.
+
+### Search
+
+- **Fix: searching a group's name found nothing.** Only children were matched,
+  so `Reports` came back empty unless a child happened to carry the word too. A
+  group that matches now offers all of its children.
+- **Fix: a query left running behind the rail silently filtered the panel the
+  next time it opened**, with nothing on screen to explain the missing entries.
+  Pinning the drawer collapsed now clears the search. A hover peek or auto-hide
+  is transient and deliberately leaves what you typed alone.
+
+### Motion and accessibility
+
+- **Fix: `pressedScale` was captured once in `initState`**, so changing it — or
+  a theme change that changed it — went unnoticed for the life of the card.
+- **Fix: reduced motion did not reach the press micro-scale.** Items went on
+  shrinking under the pointer even with `MediaQuery.disableAnimations` set. A
+  scale is movement however short its duration, so `DrawerRailTheme.resolve`
+  now forces `pressedScale` to `1` under reduced motion rather than merely
+  running it faster.
+- Add `DrawerRailTheme.pressAnimationDuration` and the matching parameter on
+  `AnimatedPressCard` (default 140ms), so the press micro-scale is as tunable
+  as every other animation.
+
+### Housekeeping
+
+- Add `DrawerRailController.resetHoverState()`: clears `hoverPeeking` and
+  `hoverHidden` without touching the pinned `collapsed`. `DrawerRail` calls it
+  on teardown; it is a no-op on an already-disposed controller, so teardown
+  order stays the caller's to choose.
+- Add `DrawerRailLabels.copyWith`, and value equality on `DrawerRailLabels` and
+  `DrawerBadge` — they can now be asserted on directly in tests.
+- **Fix: per-group state grew without bound.** Menu controllers and timers for
+  groups that no longer exist are now dropped when `entries` changes.
+- **Fix: a dartdoc link pointed at `NovaDrawer`**, a type that does not exist —
+  a leftover from an old rename.
+- README: a section of its own for search, the pub.dev badge now that the
+  package is published, and the reduce-motion and flyout behavior documented as
+  it now actually is.
+
 ## 0.4.0
 
 ### Hover: opening *and* closing

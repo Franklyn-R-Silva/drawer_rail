@@ -193,6 +193,29 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
+        // A second group, so hovering straight from one to the next is
+        // something you can actually try: the first closes as the second opens,
+        // and in the rail the flyouts swap instead of stacking up.
+        DrawerGroup(
+          id: 'reports',
+          icon: Icons.insert_chart_outlined_rounded,
+          label: 'Reports',
+          badge: const DrawerBadge.text('New'),
+          children: [
+            DrawerLink(
+              id: 'sales',
+              icon: Icons.attach_money_rounded,
+              label: 'Sales',
+              onTap: (_) => _go('Sales'),
+            ),
+            DrawerLink(
+              id: 'traffic',
+              icon: Icons.trending_up_rounded,
+              label: 'Traffic',
+              onTap: (_) => _go('Traffic'),
+            ),
+          ],
+        ),
         DrawerLink(
           id: 'settings',
           icon: Icons.settings_outlined,

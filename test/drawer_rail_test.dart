@@ -19,6 +19,42 @@ void main() {
       expect(const DrawerBadge.count(150).label, '99+');
       expect(const DrawerBadge.count(4).isCount, isTrue);
     });
+
+    test('badges compare by value', () {
+      expect(const DrawerBadge.text('New'), const DrawerBadge.text('New'));
+      expect(const DrawerBadge.count(4), const DrawerBadge.count(4));
+      expect(
+        const DrawerBadge.text('New'),
+        isNot(const DrawerBadge.text('Beta')),
+      );
+      expect(const DrawerBadge.count(4), isNot(const DrawerBadge.text('4')));
+      expect(
+        const DrawerBadge.count(4).hashCode,
+        const DrawerBadge.count(4).hashCode,
+      );
+    });
+  });
+
+  group('DrawerRailLabels', () {
+    test('copyWith replaces only what it is given', () {
+      const labels = DrawerRailLabels(searchHint: 'Buscar...');
+      final translated = labels.copyWith(noResults: 'Nenhum resultado');
+
+      expect(translated.searchHint, 'Buscar...');
+      expect(translated.noResults, 'Nenhum resultado');
+      expect(translated.expandTooltip, labels.expandTooltip);
+    });
+
+    test('labels compare by value', () {
+      expect(
+        const DrawerRailLabels(searchHint: 'a'),
+        const DrawerRailLabels(searchHint: 'a'),
+      );
+      expect(
+        const DrawerRailLabels(searchHint: 'a'),
+        isNot(const DrawerRailLabels(searchHint: 'b')),
+      );
+    });
   });
 
   group('DrawerRailController', () {
@@ -123,6 +159,34 @@ void main() {
       controller.setGroupExpanded('g', false);
       expect(controller.isGroupExpanded('g'), isFalse);
       expect(notifications, 2);
+    });
+  });
+
+  group('DrawerRailController.resetHoverState', () {
+    test('clears both hover flags without touching the pinned state', () {
+      final controller = DrawerRailController(collapsed: true);
+      addTearDown(controller.dispose);
+      controller.setHoverPeek(true);
+
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      controller.resetHoverState();
+
+      expect(controller.hoverPeeking, isFalse);
+      expect(controller.collapsed, isTrue);
+      expect(notifications, 1);
+
+      controller.resetHoverState();
+      expect(notifications, 1, reason: 'nothing left to clear');
+    });
+
+    test('is a no-op once the controller is disposed', () {
+      final controller = DrawerRailController();
+      controller.setHoverHidden(true);
+      controller.dispose();
+
+      // Teardown order is the caller's to choose, so this must not throw.
+      expect(controller.resetHoverState, returnsNormally);
     });
   });
 
@@ -399,6 +463,24 @@ void main() {
                 id: 'sales',
                 icon: Icons.attach_money,
                 label: 'Sales',
+                onTap: (_) {},
+              ),
+            ],
+          ),
+        ];
+
+    /// Two groups, for the cases where the pointer moves from one to the next.
+    List<DrawerEntry> twoGroups() => [
+          ...groupedEntries(),
+          DrawerGroup(
+            id: 'admin',
+            icon: Icons.security,
+            label: 'Admin',
+            children: [
+              DrawerLink(
+                id: 'users',
+                icon: Icons.person,
+                label: 'Users',
                 onTap: (_) {},
               ),
             ],
@@ -793,6 +875,381 @@ void main() {
       controller.setCollapsed(true);
       await tester.pump();
       expect(drawerWidth(tester), 76);
+    });
+
+    // ---- Sweeping from one group to the next ------------------------------
+
+    testWidgets('leaving one inline group for the next closes the first',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: twoGroups(),
+            theme: const DrawerRailTheme(
+              groupTrigger: DrawerActivationMode.hover,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final gesture = await hoverOver(tester, find.text('Reports'));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(controller.isGroupExpanded('reports'), isTrue);
+
+      await gesture.moveTo(tester.getCenter(find.text('Admin')));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      expect(controller.isGroupExpanded('admin'), isTrue);
+      expect(
+        controller.isGroupExpanded('reports'),
+        isFalse,
+        reason: 'one shared timer used to drop the pending close of the group '
+            'the pointer had just left, stranding it open',
+      );
+    });
+
+    testWidgets('moving down the rail swaps the flyout instead of stacking one',
+        (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: twoGroups(),
+            theme: const DrawerRailTheme(
+              groupTrigger: DrawerActivationMode.hover,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final gesture = await hoverOver(tester, find.byIcon(Icons.bar_chart));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(find.text('Sales'), findsOneWidget);
+
+      await gesture.moveTo(tester.getCenter(find.byIcon(Icons.security)));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Users'), findsOneWidget);
+      expect(
+        find.text('Sales'),
+        findsNothing,
+        reason: 'only one flyout at a time',
+      );
+    });
+
+    testWidgets('a rail flyout opens clear of the buttons below it',
+        (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(DrawerRail(controller: controller, entries: twoGroups())),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.bar_chart));
+      await tester.pumpAndSettle();
+
+      final flyout = tester.getRect(
+        find
+            .ancestor(
+              of: find.text('Sales'),
+              matching: find.byType(MenuItemButton),
+            )
+            .first,
+      );
+      final railRight = tester.getRect(find.byType(DrawerRail)).right;
+
+      expect(
+        flyout.left,
+        greaterThanOrEqualTo(railRight - 8),
+        reason: 'the flyout used to drop straight over the next rail button, '
+            'putting the group underneath out of reach',
+      );
+    });
+
+    testWidgets('a group with no children opens no empty flyout',
+        (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: const [
+              DrawerGroup(
+                id: 'empty',
+                icon: Icons.folder,
+                label: 'Empty',
+                children: [],
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.folder));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MenuItemButton), findsNothing);
+    });
+
+    // ---- Layout -----------------------------------------------------------
+
+    testWidgets('content stays anchored to the fixed edge while animating',
+        (tester) async {
+      for (final position in DrawerRailPosition.values) {
+        final onRight = position == DrawerRailPosition.right;
+        final local = DrawerRailController();
+        addTearDown(local.dispose);
+
+        await tester.pumpWidget(
+          _wrap(
+            Row(
+              children: [
+                if (onRight) const Expanded(child: SizedBox.expand()),
+                DrawerRail(
+                  controller: local,
+                  entries: entries(),
+                  theme: DrawerRailTheme(position: position),
+                ),
+                if (!onRight) const Expanded(child: SizedBox.expand()),
+              ],
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        local.setCollapsed(true);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 80));
+
+        final drawer = tester.getRect(find.byType(DrawerRail));
+        final icon = tester.getRect(find.byIcon(Icons.home));
+        final fixedEdgeGap =
+            onRight ? drawer.right - icon.right : icon.left - drawer.left;
+        final movingEdgeGap =
+            onRight ? icon.left - drawer.left : drawer.right - icon.right;
+        await tester.pumpAndSettle();
+
+        expect(
+          fixedEdgeGap,
+          lessThan(movingEdgeGap),
+          reason: 'with $position the rail must be revealed against the edge '
+              'that does not move; the content used to be laid out at the '
+              'animating width and centred, so every item slid sideways',
+        );
+      }
+    });
+
+    // ---- Search -----------------------------------------------------------
+
+    testWidgets('searching a group name offers all of its children',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(DrawerRail(controller: controller, entries: groupedEntries())),
+      );
+
+      await tester.enterText(find.byType(TextField), 'repo');
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Sales'),
+        findsOneWidget,
+        reason: 'a group used to be searchable only through its children',
+      );
+    });
+
+    testWidgets('pinning the drawer collapsed drops a running search',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(DrawerRail(controller: controller, entries: entries())),
+      );
+
+      await tester.enterText(find.byType(TextField), 'sett');
+      await tester.pumpAndSettle();
+      expect(find.text('Home'), findsNothing);
+
+      controller.setCollapsed(true);
+      await tester.pumpAndSettle();
+      controller.setCollapsed(false);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Home'),
+        findsOneWidget,
+        reason: 'a query left running behind the rail silently filtered the '
+            'panel the next time it opened',
+      );
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        isEmpty,
+      );
+    });
+
+    testWidgets('a hover peek does not throw away what was typed',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: const DrawerRailTheme(
+              railTrigger: DrawerActivationMode.hover,
+              railAutoCollapse: true,
+            ),
+          ),
+        ),
+      );
+
+      await tester.enterText(find.byType(TextField), 'sett');
+      await tester.pumpAndSettle();
+
+      final gesture = await hoverOver(tester, find.byType(DrawerRail));
+      await gesture.moveTo(const Offset(2000, 2000));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+      expect(controller.hoverHidden, isTrue, reason: 'auto-hidden to the rail');
+
+      // Back in: the panel returns, and so should the query.
+      await gesture.moveTo(tester.getCenter(find.byType(DrawerRail)));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        'sett',
+        reason: 'an auto-hide is transient and must not clear the field',
+      );
+      expect(find.text('Home'), findsNothing, reason: 'still filtered');
+    });
+
+    // ---- Press feedback ---------------------------------------------------
+
+    /// The on-screen width of [finder], transforms included. [getSize] reports
+    /// layout size and so is blind to a [Transform.scale].
+    double renderedWidth(WidgetTester tester, Finder finder) =>
+        tester.getRect(finder).width;
+
+    testWidgets('a changed pressedScale takes effect on the next press',
+        (tester) async {
+      Widget build(double scale) => _wrap(
+            Center(
+              child: AnimatedPressCard(
+                pressedScale: scale,
+                onTap: () {},
+                child: const Padding(
+                  padding: EdgeInsets.zero,
+                  child: SizedBox(width: 100, height: 40),
+                ),
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(build(0.97));
+      await tester.pumpWidget(build(0.5));
+      await tester.pump();
+
+      final inner = find
+          .descendant(
+            of: find.byType(AnimatedPressCard),
+            matching: find.byType(Padding),
+          )
+          .last;
+      final restWidth = renderedWidth(tester, inner);
+
+      final gesture =
+          await tester.startGesture(tester.getCenter(find.byType(SizedBox)));
+      // The first pump fires the tap-down deadline; the ticker advances after.
+      await tester.pump(const Duration(milliseconds: 120));
+      await tester.pump(const Duration(milliseconds: 200));
+      final pressedWidth = renderedWidth(tester, inner);
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(
+        pressedWidth / restWidth,
+        closeTo(0.5, 0.02),
+        reason: 'the tween used to be built once in initState, so a theme '
+            'change went unnoticed for the life of the card',
+      );
+    });
+
+    testWidgets('reduced motion stops items shrinking under the pointer',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(disableAnimations: true),
+            child: Scaffold(
+              body: DrawerRail(controller: controller, entries: entries()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final card = find.byType(AnimatedPressCard).first;
+      final inner =
+          find.descendant(of: card, matching: find.byType(Container)).first;
+      final restWidth = renderedWidth(tester, inner);
+
+      final gesture = await tester.startGesture(tester.getCenter(card));
+      await tester.pump(const Duration(milliseconds: 120));
+      await tester.pump(const Duration(milliseconds: 200));
+      final pressedWidth = renderedWidth(tester, inner);
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(
+        pressedWidth,
+        restWidth,
+        reason: 'a scale is movement, so reduced motion switches it off '
+            'outright rather than merely running it faster',
+      );
+    });
+
+    // ---- Teardown ---------------------------------------------------------
+
+    testWidgets('disposing mid-peek hands the controller back unpeeked',
+        (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: const DrawerRailTheme(
+              railTrigger: DrawerActivationMode.hover,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final gesture = await hoverOver(tester, find.byType(DrawerRail));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(controller.hoverPeeking, isTrue);
+
+      // Navigate away while the peek is live.
+      await tester.pumpWidget(_wrap(const Text('somewhere else')));
+      await tester.pumpAndSettle();
+
+      expect(controller.hoverPeeking, isFalse);
+      expect(
+        controller.railCollapsed,
+        isTrue,
+        reason: 'a controller outliving the drawer used to report the wrong '
+            'rail state for good',
+      );
+      await gesture.moveTo(const Offset(2000, 2000));
     });
 
     testWidgets('rounds the left edge when positioned right', (tester) async {

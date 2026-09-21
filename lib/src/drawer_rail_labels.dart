@@ -42,4 +42,40 @@ class DrawerRailLabels {
 
   /// Tooltip for the search icon shown on the collapsed rail.
   final String searchTooltip;
+
+  /// Returns a copy of these labels with the given strings replaced.
+  DrawerRailLabels copyWith({
+    String? searchHint,
+    String? noResults,
+    String? expandTooltip,
+    String? collapseTooltip,
+    String? searchTooltip,
+  }) {
+    return DrawerRailLabels(
+      searchHint: searchHint ?? this.searchHint,
+      noResults: noResults ?? this.noResults,
+      expandTooltip: expandTooltip ?? this.expandTooltip,
+      collapseTooltip: collapseTooltip ?? this.collapseTooltip,
+      searchTooltip: searchTooltip ?? this.searchTooltip,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DrawerRailLabels &&
+          other.searchHint == searchHint &&
+          other.noResults == noResults &&
+          other.expandTooltip == expandTooltip &&
+          other.collapseTooltip == collapseTooltip &&
+          other.searchTooltip == searchTooltip;
+
+  @override
+  int get hashCode => Object.hash(
+        searchHint,
+        noResults,
+        expandTooltip,
+        collapseTooltip,
+        searchTooltip,
+      );
 }

@@ -1,11 +1,8 @@
 # drawer_rail
 
+[![pub package](https://img.shields.io/pub/v/drawer_rail.svg)](https://pub.dev/packages/drawer_rail)
 [![CI](https://github.com/Franklyn-R-Silva/drawer_rail/actions/workflows/ci.yaml/badge.svg)](https://github.com/Franklyn-R-Silva/drawer_rail/actions/workflows/ci.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-
-<!-- After the first `flutter pub publish`, add the pub badge:
-[![pub package](https://img.shields.io/pub/v/drawer_rail.svg)](https://pub.dev/packages/drawer_rail)
--->
 
 A collapsible, themeable **side navigation drawer** for Flutter.
 
@@ -40,7 +37,8 @@ State lives in a plain `ChangeNotifier` (`DrawerRailController`), so there is
   overwriting the state you persist.
 - 👆 **Correct cursors**: a hand over anything clickable, an arrow everywhere
   else — and it is themeable.
-- 🔎 Built-in, diacritic-insensitive search (`"acao"` matches `"Ação"`).
+- 🔎 Built-in, diacritic-insensitive search (`"acao"` matches `"Ação"`) that
+  also finds a whole group by its name.
 - 🏷️ Text and count badges (`New`, `4`, `99+`).
 - 🎨 Themeable via `DrawerRailTheme`, with automatic `ColorScheme` fallbacks.
 - 🎞️ Every duration **and curve** exposed; honours the OS "reduce motion"
@@ -55,8 +53,17 @@ Add it to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  drawer_rail: ^0.4.0
+  drawer_rail: ^0.5.0
 ```
+
+Or let pub add it for you:
+
+```bash
+flutter pub add drawer_rail
+```
+
+Requires Dart `^3.5.0` and Flutter `>=3.24.0`. Works on every Flutter target;
+the hover behavior needs a pointer, so it simply never fires on touch.
 
 Then import it:
 
@@ -154,6 +161,23 @@ DrawerBadge.text('New');  // pill with text
 DrawerBadge.count(4);     // numeric; hidden at 0, shown as "99+" above 99
 ```
 
+## Search
+
+Set `showSearch: true` (the default) and the panel gets a filter field; the
+collapsed rail gets a magnifier that expands the drawer and focuses it.
+
+- **Diacritics are ignored both ways**, so `acao` finds `Ação` and vice versa.
+- **Group names match too.** Typing `repo` surfaces every link inside
+  `Reports`, not just the children whose own label happens to carry the word.
+- Results are shown **flat** — sections and group headers drop away, because a
+  hierarchy no longer tells you anything once you are filtering.
+- **Pinning the drawer collapsed clears the query.** The field is not on screen
+  in the rail, so a query left running there would silently filter the panel the
+  next time it opened. A hover peek or auto-hide is transient and deliberately
+  leaves what you typed alone.
+
+`showSearch: false` removes the field and the rail button alike.
+
 ## The controller
 
 `DrawerRailController` is a `ChangeNotifier`:
@@ -168,8 +192,16 @@ final controller = DrawerRailController(
 controller.toggleCollapsed();   // panel <-> rail
 controller.setCollapsed(true);
 controller.select('payments');  // highlight an entry
+controller.clearSelection();
 controller.toggleGroup('services');
+controller.setGroupExpanded('services', true); // idempotent
+controller.resetHoverState();   // drop a peek/auto-hide, keep `collapsed`
 ```
+
+`DrawerRail` calls `resetHoverState()` for you when it leaves the tree, so a
+controller that outlives the drawer — one hoisted above the navigator, say —
+never goes on reporting a peek that nothing is holding open. Calling it on an
+already-disposed controller is a no-op, so teardown order stays yours.
 
 Reading state — the distinction matters once hover is involved:
 
@@ -264,6 +296,7 @@ DrawerRail(
     hoverAnimationDuration: Duration(milliseconds: 160),
     hoverAnimationCurve: Curves.easeOut,
     pressedScale: 0.97,
+    pressAnimationDuration: Duration(milliseconds: 140),
   ),
 );
 ```
@@ -322,14 +355,15 @@ change it. Defaults in parentheses.
 | `hoverHighlightColor` | The background tint. Only read in `highlight` mode. |
 | `hoverAnimationDuration` (`160ms`) | How long that shadow/tint takes to fade **in and out**. Set to `Duration.zero` to snap. |
 | `hoverAnimationCurve` (`easeOut`) | The curve of that fade. |
-| `pressedScale` (`0.97`) | How far an item shrinks while held. It springs back with a slight overshoot on release. |
+| `pressedScale` (`0.97`) | How far an item shrinks while held. It springs back with a slight overshoot on release. Set it to `1` to switch the micro-scale off. |
+| `pressAnimationDuration` (`140ms`) | How long that shrink takes. |
 
 #### Activation (what opens things — click or pointer)
 
 | Field | What it turns on |
 | ----- | ---------------- |
 | `railTrigger` (`click`) | Set to `hover` and the collapsed rail **expands when the pointer enters it** and collapses again when it leaves. A temporary peek — it never writes `controller.collapsed`. |
-| `groupTrigger` (`click`) | Set to `hover` and groups open under the pointer: inline in the panel, as a flyout in the rail. |
+| `groupTrigger` (`click`) | Set to `hover` and groups open under the pointer: inline in the panel, as a flyout in the rail. Flyouts open *beside* the rail, so the buttons below stay reachable, and only one is ever open at a time. |
 | `linkTrigger` (`click`) | Set to `hover` and resting on a link **runs its `onTap`** — navigation included. See the warning below. |
 | `railAutoCollapse` (`false`) | Only with `railTrigger: hover`. Also closes a drawer the user left **expanded** when the pointer leaves, making hover fully symmetric. Off by default because it takes away a panel someone deliberately pinned. |
 | `hoverOpenDelay` (`120ms`) | How long the pointer must rest before a hover-open fires. Raise it if the drawer feels twitchy. |
@@ -362,12 +396,20 @@ change it. Defaults in parentheses.
 | ----- | --------------- |
 | `animationDuration` (`240ms`) / `animationCurve` (`easeOutCubic`) | The panel ↔ rail width animation. |
 | `groupAnimationDuration` (`200ms`) / `groupAnimationCurve` (`easeOutCubic`) | The group unfold **and** its chevron rotation. Try `Curves.easeOutBack` for a little overshoot. |
+| `pressAnimationDuration` (`140ms`) | The press micro-scale. |
+
+While the drawer animates its width, the content is laid out at the width it is
+heading *to* and anchored against the edge that does not move — the rail is
+revealed rather than squeezed, so nothing re-wraps, ellipsises or slides
+sideways on the way. With `position: right` that anchor flips with it.
 
 > **Reduce motion is automatic.** When the OS asks for reduced animations
 > (`MediaQuery.disableAnimations`), every duration above collapses to zero and
-> the drawer snaps between states. The hover *delays* are deliberately kept —
-> they gate an interaction, not a motion effect, and zeroing them would make the
-> drawer fire on the slightest twitch.
+> `pressedScale` is forced to `1`, so the drawer snaps between states and items
+> stop shrinking under the pointer — a scale is movement however short its
+> duration. The hover *delays* are deliberately kept: they gate an interaction,
+> not a motion effect, and zeroing them would make the drawer fire on the
+> slightest twitch.
 
 ## Opening and closing on hover (web & desktop)
 
@@ -428,6 +470,9 @@ const DrawerRailTheme(
 - **A group you opened by clicking stays open** when the pointer leaves. Only
   groups that hover itself opened are closed again — including when the whole
   panel closes, so nothing is left hanging open for next time.
+- **Sweeping down a list of groups leaves nothing behind.** Each group keeps its
+  own timer, so moving straight from one to the next closes the first and opens
+  the second; in the rail, only one flyout is ever open at a time.
 
 ### The one to be careful with
 
@@ -508,9 +553,21 @@ DrawerRail(
     noResults: 'Nenhum resultado',
     expandTooltip: 'Expandir',
     collapseTooltip: 'Recolher',
+    searchTooltip: 'Buscar',
   ),
 );
 ```
+
+Wire it to your existing delegate by building the labels from whatever
+`AppLocalizations` you already have, or override a single string with
+`copyWith`:
+
+```dart
+labels: const DrawerRailLabels().copyWith(noResults: 'Nada encontrado'),
+```
+
+`DrawerRailLabels` and `DrawerBadge` compare by value, so rebuilding them inline
+costs nothing and they can be asserted on directly in tests.
 
 ## Example
 

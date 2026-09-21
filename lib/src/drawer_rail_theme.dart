@@ -67,6 +67,7 @@ class DrawerRailTheme {
     this.railIconSize = 22,
     this.railItemHeight = 44,
     this.pressedScale = 0.97,
+    this.pressAnimationDuration = const Duration(milliseconds: 140),
     this.sectionUppercase = true,
     this.contentPadding =
         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -153,7 +154,14 @@ class DrawerRailTheme {
   final double railItemHeight;
 
   /// The scale applied to an item while it is pressed. Defaults to `0.97`.
+  ///
+  /// Set it to `1` to turn the press micro-scale off. [resolve] does exactly
+  /// that when the platform asks for reduced motion: a scale is movement, so
+  /// shortening its duration is not enough.
   final double pressedScale;
+
+  /// How long the press micro-scale takes to run. Defaults to 140ms.
+  final Duration pressAnimationDuration;
 
   /// Whether section labels are rendered uppercased. Defaults to `true`.
   final bool sectionUppercase;
@@ -379,6 +387,7 @@ class DrawerRailTheme {
     double? railIconSize,
     double? railItemHeight,
     double? pressedScale,
+    Duration? pressAnimationDuration,
     bool? sectionUppercase,
     EdgeInsetsGeometry? contentPadding,
     EdgeInsetsGeometry? itemPadding,
@@ -435,6 +444,8 @@ class DrawerRailTheme {
       railIconSize: railIconSize ?? this.railIconSize,
       railItemHeight: railItemHeight ?? this.railItemHeight,
       pressedScale: pressedScale ?? this.pressedScale,
+      pressAnimationDuration:
+          pressAnimationDuration ?? this.pressAnimationDuration,
       sectionUppercase: sectionUppercase ?? this.sectionUppercase,
       contentPadding: contentPadding ?? this.contentPadding,
       itemPadding: itemPadding ?? this.itemPadding,
@@ -482,7 +493,10 @@ class DrawerRailTheme {
   ///
   /// When [reduceMotion] is `true` — normally from
   /// [MediaQuery.disableAnimationsOf] — every animation *duration* collapses to
-  /// [Duration.zero] so the drawer snaps between states instead of sliding.
+  /// [Duration.zero] so the drawer snaps between states instead of sliding, and
+  /// [pressedScale] is forced to `1` so items stop shrinking under the pointer
+  /// (a scale is movement, however brief).
+  ///
   /// Hover dwell delays are deliberately left alone: they gate an interaction,
   /// not a motion effect, and zeroing them would make the drawer fire on the
   /// slightest pointer movement.
@@ -514,7 +528,10 @@ class DrawerRailTheme {
       iconSize: iconSize,
       railIconSize: railIconSize,
       railItemHeight: railItemHeight,
-      pressedScale: pressedScale,
+      // A scale is movement, so reduced motion switches it off outright
+      // rather than merely running it faster.
+      pressedScale: reduceMotion ? 1 : pressedScale,
+      pressAnimationDuration: motion(pressAnimationDuration),
       sectionUppercase: sectionUppercase,
       contentPadding: contentPadding,
       itemPadding: itemPadding,
@@ -599,6 +616,7 @@ class ResolvedDrawerRailTheme {
     required this.railIconSize,
     required this.railItemHeight,
     required this.pressedScale,
+    required this.pressAnimationDuration,
     required this.sectionUppercase,
     required this.contentPadding,
     required this.itemPadding,
@@ -684,8 +702,11 @@ class ResolvedDrawerRailTheme {
   /// See [DrawerRailTheme.railItemHeight].
   final double railItemHeight;
 
-  /// See [DrawerRailTheme.pressedScale].
+  /// See [DrawerRailTheme.pressedScale]. Resolves to `1` under reduced motion.
   final double pressedScale;
+
+  /// See [DrawerRailTheme.pressAnimationDuration].
+  final Duration pressAnimationDuration;
 
   /// See [DrawerRailTheme.sectionUppercase].
   final bool sectionUppercase;

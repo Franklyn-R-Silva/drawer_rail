@@ -36,6 +36,7 @@ class DrawerRailController extends ChangeNotifier {
   bool _collapsed;
   bool _hoverPeeking = false;
   bool _hoverHidden = false;
+  bool _disposed = false;
   String? _selectedId;
   final Set<String> _expandedGroups;
 
@@ -142,6 +143,27 @@ class DrawerRailController extends ChangeNotifier {
       _expandedGroups.add(id);
     }
     notifyListeners();
+  }
+
+  /// Clears the transient hover state — [hoverPeeking] and [hoverHidden] —
+  /// leaving the pinned [collapsed] preference untouched.
+  ///
+  /// [DrawerRail] calls this as it leaves the tree, so a controller that
+  /// outlives the drawer (one hoisted above the navigator, say) does not go on
+  /// reporting a peek that no widget is holding open any more. Safe to call on
+  /// an already-disposed controller, since teardown order is the caller's to
+  /// choose: it simply does nothing.
+  void resetHoverState() {
+    if (_disposed || (!_hoverPeeking && !_hoverHidden)) return;
+    _hoverPeeking = false;
+    _hoverHidden = false;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   /// Expands ([expanded] `true`) or collapses the group with [id]. No-op if it

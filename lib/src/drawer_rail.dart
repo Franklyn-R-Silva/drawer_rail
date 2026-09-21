@@ -119,24 +119,97 @@ class _DrawerRailState extends State<DrawerRail> {
   // bails out when the state is gone, so a pointer leaving right as the drawer
   // is torn down can never call setState on a dead State.
   Timer? _peekTimer;
-  Timer? _groupTimer;
-  Timer? _menuTimer;
   Timer? _linkTimer;
 
-  /// The group hover opened, if any. Only this one is closed again when the
-  /// pointer leaves — a group the user opened by clicking stays open.
-  String? _hoverOpenedGroupId;
+  // Groups and flyouts get a timer *per id*. A single shared timer used to lose
+  // the pending close of the group the pointer had just left the moment it
+  // entered the next one, stranding the first one open.
+  final _groupTimers = <String, Timer>{};
+  final _menuTimers = <String, Timer>{};
+
+  /// The groups hover opened. Only these are closed again when the pointer
+  /// leaves — a group the user opened by clicking stays open.
+  ///
+  /// A set rather than a single id: sweeping across several groups can leave
+  /// more than one of them mid-close at the same time.
+  final _hoverOpenedGroupIds = <String>{};
 
   /// One [MenuController] per group id, so the flyout can be driven from both
   /// the rail button and the menu panel.
   final _menuControllers = <String, MenuController>{};
 
+  /// The last *pinned* collapsed state seen, so the search can be cleared on
+  /// the edge rather than on every notification.
+  late bool _wasPinnedCollapsed;
+
+  @override
+  void initState() {
+    super.initState();
+    _wasPinnedCollapsed = widget.controller.collapsed;
+    widget.controller.addListener(_onControllerChanged);
+  }
+
+  /// Drops a running search when the user pins the drawer collapsed.
+  ///
+  /// The search field is not on screen in the rail, so a query left running
+  /// there would silently filter the panel the next time it is expanded, with
+  /// nothing on screen to explain the missing entries. A hover peek or
+  /// auto-hide is deliberately *not* treated as collapsing: those are transient
+  /// and must not throw away what someone typed.
+  void _onControllerChanged() {
+    final pinned = widget.controller.collapsed;
+    if (pinned == _wasPinnedCollapsed) return;
+    _wasPinnedCollapsed = pinned;
+    if (pinned && _query.isNotEmpty) _clearSearch();
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    if (mounted) setState(() => _query = '');
+  }
+
+  @override
+  void didUpdateWidget(DrawerRail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(widget.controller, oldWidget.controller)) {
+      oldWidget.controller.removeListener(_onControllerChanged);
+      widget.controller.addListener(_onControllerChanged);
+      _wasPinnedCollapsed = widget.controller.collapsed;
+    }
+    if (identical(widget.entries, oldWidget.entries)) return;
+    // Entries can be rebuilt at will, so forget the per-group bookkeeping of
+    // groups that no longer exist instead of growing these maps forever.
+    final ids = {
+      for (final e in widget.entries)
+        if (e is DrawerGroup) e.id,
+    };
+    _menuControllers.removeWhere((id, _) => !ids.contains(id));
+    _groupTimers.removeWhere((id, timer) {
+      if (ids.contains(id)) return false;
+      timer.cancel();
+      return true;
+    });
+    _menuTimers.removeWhere((id, timer) {
+      if (ids.contains(id)) return false;
+      timer.cancel();
+      return true;
+    });
+    _hoverOpenedGroupIds.removeWhere((id) => !ids.contains(id));
+  }
+
   @override
   void dispose() {
+    widget.controller.removeListener(_onControllerChanged);
+    // Hover state belongs to this widget, not to the caller. A drawer torn down
+    // mid-peek used to leave the controller claiming to be peeked open for
+    // good, so a controller that outlives the drawer — one hoisted above the
+    // navigator, say — reported the wrong railCollapsed from then on.
+    widget.controller.resetHoverState();
     _peekTimer?.cancel();
-    _groupTimer?.cancel();
-    _menuTimer?.cancel();
     _linkTimer?.cancel();
+    for (final timer in [..._groupTimers.values, ..._menuTimers.values]) {
+      timer.cancel();
+    }
     _searchController.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -152,6 +225,21 @@ class _DrawerRailState extends State<DrawerRail> {
     pending?.cancel();
     return Timer(delay, () {
       if (mounted) action();
+    });
+  }
+
+  /// The per-id variant of [_after]: each group keeps its own slot in [timers],
+  /// so a pending close for one group is never cancelled by another group's
+  /// pending open.
+  void _afterFor(
+    Map<String, Timer> timers,
+    String id,
+    Duration delay,
+    VoidCallback action,
+  ) {
+    timers[id] = _after(timers[id], delay, () {
+      timers.remove(id);
+      action();
     });
   }
 
@@ -189,18 +277,19 @@ class _DrawerRailState extends State<DrawerRail> {
       if (pinnedOpen) _controller.setHoverHidden(true);
       // A group hover opened inside the panel must not still be sitting open
       // the next time it is revealed.
-      _closeHoverOpenedGroup();
+      _closeHoverOpenedGroups();
     });
   }
 
-  /// Closes the group hover opened, if any, and forgets it. A group the user
-  /// clicked open is left alone.
-  void _closeHoverOpenedGroup() {
-    final id = _hoverOpenedGroupId;
-    if (id == null) return;
-    _hoverOpenedGroupId = null;
-    _groupTimer?.cancel();
-    _controller.setGroupExpanded(id, false);
+  /// Closes every group hover opened and forgets them. A group the user clicked
+  /// open is left alone.
+  void _closeHoverOpenedGroups() {
+    if (_hoverOpenedGroupIds.isEmpty) return;
+    for (final id in _hoverOpenedGroupIds.toList()) {
+      _groupTimers.remove(id)?.cancel();
+      _controller.setGroupExpanded(id, false);
+    }
+    _hoverOpenedGroupIds.clear();
   }
 
   /// (C) Pointer entering/leaving an inline group in the expanded panel.
@@ -210,16 +299,16 @@ class _DrawerRailState extends State<DrawerRail> {
     ResolvedDrawerRailTheme theme,
   ) {
     if (theme.groupTrigger != DrawerActivationMode.hover) return;
-    _groupTimer = _after(
-      _groupTimer,
+    _afterFor(
+      _groupTimers,
+      group.id,
       entered ? theme.hoverOpenDelay : theme.hoverCloseDelay,
       () {
         if (entered) {
           if (_controller.isGroupExpanded(group.id)) return;
-          _hoverOpenedGroupId = group.id;
+          _hoverOpenedGroupIds.add(group.id);
           _controller.setGroupExpanded(group.id, true);
-        } else if (_hoverOpenedGroupId == group.id) {
-          _hoverOpenedGroupId = null;
+        } else if (_hoverOpenedGroupIds.remove(group.id)) {
           _controller.setGroupExpanded(group.id, false);
         }
       },
@@ -231,15 +320,38 @@ class _DrawerRailState extends State<DrawerRail> {
   /// an exit — does not slam the menu shut.
   void _onMenuHover(
     bool entered,
+    DrawerGroup group,
     MenuController menu,
     ResolvedDrawerRailTheme theme,
   ) {
     if (theme.groupTrigger != DrawerActivationMode.hover) return;
-    _menuTimer = _after(
-      _menuTimer,
+    _afterFor(
+      _menuTimers,
+      group.id,
       entered ? theme.hoverOpenDelay : theme.hoverCloseDelay,
-      () => entered ? menu.open() : menu.close(),
+      () => entered
+          ? _openMenu(group.id, menu, hasItems: group.children.isNotEmpty)
+          : menu.close(),
     );
+  }
+
+  /// Opens [menu] and shuts every other flyout at once, so sliding down the
+  /// rail never leaves a trail of overlays hanging over the app.
+  ///
+  /// A group with no children opens nothing: an empty flyout is a bare sliver
+  /// of surface that the user then has to dismiss.
+  void _openMenu(
+    String groupId,
+    MenuController menu, {
+    required bool hasItems,
+  }) {
+    if (!hasItems) return;
+    for (final entry in _menuControllers.entries) {
+      if (entry.key == groupId) continue;
+      _menuTimers.remove(entry.key)?.cancel();
+      if (entry.value.isOpen) entry.value.close();
+    }
+    menu.open();
   }
 
   /// (D) Pointer resting on a link activates it, navigation included.
@@ -315,11 +427,18 @@ class _DrawerRailState extends State<DrawerRail> {
                     ),
               boxShadow: theme.shadow,
             ),
-            // Lay content out at its natural width regardless of the animating
-            // container width, so the tween never under-constrains it (no
-            // overflow); the container clips the reveal.
+            // Lay content out at its *target* width regardless of the
+            // animating container width, so the tween never squeezes it (no
+            // mid-animation ellipsis, no items sliding sideways); the container
+            // clips the reveal. `minWidth: 0` is what makes that true — without
+            // it the tight width of the animating container is inherited as a
+            // floor and the content is laid out at the animating width after
+            // all, then centred.
             child: OverflowBox(
-              alignment: Alignment.centerLeft,
+              alignment: theme.position == DrawerRailPosition.right
+                  ? Alignment.centerRight
+                  : Alignment.centerLeft,
+              minWidth: 0,
               maxWidth: double.infinity,
               child: SizedBox(
                 width: width,
@@ -431,10 +550,7 @@ class _DrawerRailState extends State<DrawerRail> {
               ? base.suffixIcon
               : IconButton(
                   icon: Icon(theme.clearSearchIcon, size: 18),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() => _query = '');
-                  },
+                  onPressed: _clearSearch,
                 ),
         ),
       ),
@@ -453,7 +569,14 @@ class _DrawerRailState extends State<DrawerRail> {
         if (e is DrawerLink && _matches(e.label)) {
           matches.add(e);
         } else if (e is DrawerGroup) {
-          matches.addAll(e.children.where((c) => _matches(c.label)));
+          // A group that matches by its own name offers all of its children:
+          // searching "Reports" used to come back empty unless a child happened
+          // to carry the word too.
+          matches.addAll(
+            _matches(e.label)
+                ? e.children
+                : e.children.where((c) => _matches(c.label)),
+          );
         }
       }
       if (matches.isEmpty) {
@@ -536,6 +659,7 @@ class _DrawerRailState extends State<DrawerRail> {
         child: AnimatedPressCard(
           onTap: () => _openLink(link),
           pressedScale: theme.pressedScale,
+          pressAnimationDuration: theme.pressAnimationDuration,
           hoverEffect: theme.hoverEffect,
           hoverShadowColor: theme.hoverShadowColor,
           hoverHighlightColor: theme.hoverHighlightColor,
@@ -591,6 +715,7 @@ class _DrawerRailState extends State<DrawerRail> {
             child: AnimatedPressCard(
               onTap: () => _toggleGroup(group),
               pressedScale: theme.pressedScale,
+              pressAnimationDuration: theme.pressAnimationDuration,
               hoverEffect: theme.hoverEffect,
               hoverShadowColor: theme.hoverShadowColor,
               hoverHighlightColor: theme.hoverHighlightColor,
@@ -662,8 +787,8 @@ class _DrawerRailState extends State<DrawerRail> {
   /// Toggles a group from an explicit click, which also *pins* it: a group the
   /// user clicked open must not close just because the pointer left.
   void _toggleGroup(DrawerGroup group) {
-    _groupTimer?.cancel();
-    if (_hoverOpenedGroupId == group.id) _hoverOpenedGroupId = null;
+    _groupTimers.remove(group.id)?.cancel();
+    _hoverOpenedGroupIds.remove(group.id);
     _controller.toggleGroup(group.id);
   }
 
@@ -697,9 +822,19 @@ class _DrawerRailState extends State<DrawerRail> {
     // Owned by the state (not the builder callback) so the flyout can be kept
     // open from the menu panel as well as from the rail button.
     final menu = _menuControllers.putIfAbsent(group.id, MenuController.new);
-    return MenuAnchor(
+    final onRight = theme.position == DrawerRailPosition.right;
+    // Captured outside the flyout, so the RTL wrapper below cannot leak into
+    // the items themselves.
+    final appDirection = Directionality.of(context);
+    final anchored = MenuAnchor(
       controller: menu,
+      // Open beside the rail, not below the button: the default placement drops
+      // the flyout straight over the next rail buttons, so the group underneath
+      // an open group could not be reached at all — fatal with hover, where the
+      // pointer has to travel *through* the overlay to get anywhere.
+      alignmentOffset: const Offset(_flyoutGap, 0),
       style: MenuStyle(
+        alignment: AlignmentDirectional.topEnd,
         backgroundColor: WidgetStatePropertyAll(theme.menuBackgroundColor),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
@@ -714,25 +849,28 @@ class _DrawerRailState extends State<DrawerRail> {
           // Entering an item cancels the pending close, so the flyout survives
           // the pointer travelling from the rail button across to the overlay.
           MouseRegion(
-            onEnter: (_) => _onMenuHover(true, menu, theme),
-            onExit: (_) => _onMenuHover(false, menu, theme),
-            child: MenuItemButton(
-              style: ButtonStyle(
-                mouseCursor: WidgetStatePropertyAll(theme.clickableCursor),
+            onEnter: (_) => _onMenuHover(true, group, menu, theme),
+            onExit: (_) => _onMenuHover(false, group, menu, theme),
+            child: Directionality(
+              textDirection: appDirection,
+              child: MenuItemButton(
+                style: ButtonStyle(
+                  mouseCursor: WidgetStatePropertyAll(theme.clickableCursor),
+                ),
+                leadingIcon: Icon(
+                  child.icon,
+                  size: theme.iconSize,
+                  color: theme.iconColor,
+                ),
+                onPressed: () => _openLink(child),
+                child: Text(child.label),
               ),
-              leadingIcon: Icon(
-                child.icon,
-                size: theme.iconSize,
-                color: theme.iconColor,
-              ),
-              onPressed: () => _openLink(child),
-              child: Text(child.label),
             ),
           ),
       ],
       builder: (context, controller, _) => MouseRegion(
-        onEnter: (_) => _onMenuHover(true, controller, theme),
-        onExit: (_) => _onMenuHover(false, controller, theme),
+        onEnter: (_) => _onMenuHover(true, group, controller, theme),
+        onExit: (_) => _onMenuHover(false, group, controller, theme),
         child: _RailButton(
           icon: group.icon,
           tooltip: group.label,
@@ -740,16 +878,27 @@ class _DrawerRailState extends State<DrawerRail> {
           theme: theme,
           badge: group.badge,
           onTap: () {
-            _menuTimer?.cancel();
+            _menuTimers.remove(group.id)?.cancel();
             if (controller.isOpen) {
               controller.close();
             } else {
-              controller.open();
+              _openMenu(
+                group.id,
+                controller,
+                hasItems: group.children.isNotEmpty,
+              );
             }
           },
         ),
       ),
     );
+
+    // A flyout on a right-hand rail has to grow *leftwards*, and the only lever
+    // MenuAnchor gives for that is directionality: in RTL it measures from the
+    // anchor's start edge instead of its end. Each item flips back to the app's
+    // own direction so the icons and text still read normally.
+    if (!onRight) return anchored;
+    return Directionality(textDirection: TextDirection.rtl, child: anchored);
   }
 
   // ---- Shared bits ---------------------------------------------------------
@@ -785,6 +934,14 @@ class _DrawerRailState extends State<DrawerRail> {
   }
 }
 
+/// The breathing room left between the rail and a flyout opened beside it.
+const double _flyoutGap = 4;
+
+/// The horizontal inset of a rail button inside the rail. Shared with the
+/// flyout placement, which measures from the rail's edge rather than the
+/// button's.
+const double _railButtonInset = 10;
+
 /// A single icon button in the collapsed rail: tooltip, selected pill and an
 /// optional badge dot.
 class _RailButton extends StatelessWidget {
@@ -813,12 +970,16 @@ class _RailButton extends StatelessWidget {
         : (danger ? theme.errorColor : theme.iconColor);
     final showDot = badge?.label != null;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 10),
+      padding: const EdgeInsets.symmetric(
+        vertical: 3,
+        horizontal: _railButtonInset,
+      ),
       child: Tooltip(
         message: tooltip,
         child: AnimatedPressCard(
           onTap: onTap,
           pressedScale: theme.pressedScale,
+          pressAnimationDuration: theme.pressAnimationDuration,
           hoverEffect: theme.hoverEffect,
           hoverShadowColor: theme.hoverShadowColor,
           hoverHighlightColor: theme.hoverHighlightColor,
