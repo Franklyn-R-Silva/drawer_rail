@@ -25,6 +25,7 @@ class AnimatedPressCard extends StatefulWidget {
     this.hoverAnimationCurve = Curves.easeOut,
     this.clickableCursor = SystemMouseCursors.click,
     this.inertCursor = SystemMouseCursors.basic,
+    this.pressAnimationDuration = const Duration(milliseconds: 140),
   });
 
   /// The content of the card.
@@ -37,6 +38,10 @@ class AnimatedPressCard extends StatefulWidget {
   final BorderRadius borderRadius;
 
   /// The scale factor applied while the card is pressed. Defaults to `0.97`.
+  ///
+  /// Set it to `1` to turn the press micro-scale off entirely — which is what
+  /// [DrawerRailTheme.resolve] does when the platform asks for reduced motion,
+  /// since a scale is movement however short its duration.
   final double pressedScale;
 
   /// Which visual feedback to show on hover. Defaults to
@@ -78,6 +83,10 @@ class AnimatedPressCard extends StatefulWidget {
   /// the click cursor from a neighbouring item.
   final MouseCursor inertCursor;
 
+  /// How long the press micro-scale takes. Defaults to 140ms; [Duration.zero]
+  /// alongside a [pressedScale] of `1` is how the card goes completely still.
+  final Duration pressAnimationDuration;
+
   @override
   State<AnimatedPressCard> createState() => _AnimatedPressCardState();
 }
@@ -85,25 +94,48 @@ class AnimatedPressCard extends StatefulWidget {
 class _AnimatedPressCardState extends State<AnimatedPressCard>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-  late final Animation<double> _scale;
+  late Animation<double> _scale;
   bool _hovered = false;
+
+  /// Whether the press is worth animating at all. A scale of `1` means the card
+  /// was asked to stay still — under reduced motion, typically — so the ticker
+  /// is left alone entirely rather than driven through a no-op tween.
+  bool get _scales => widget.pressedScale != 1;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 140),
+      duration: widget.pressAnimationDuration,
     );
-    _scale = Tween<double>(begin: 1, end: widget.pressedScale).animate(
-      CurvedAnimation(
-        parent: _controller,
-        // Press in crisply, release with a slight overshoot so the item springs
-        // back to size instead of easing flatly into it.
-        curve: Curves.easeOut,
-        reverseCurve: Curves.easeOutBack,
-      ),
-    );
+    _scale = _buildScale();
+  }
+
+  Animation<double> _buildScale() =>
+      Tween<double>(begin: 1, end: widget.pressedScale).animate(
+        CurvedAnimation(
+          parent: _controller,
+          // Press in crisply, release with a slight overshoot so the item
+          // springs back to size instead of easing flatly into it.
+          curve: Curves.easeOut,
+          reverseCurve: Curves.easeOutBack,
+        ),
+      );
+
+  @override
+  void didUpdateWidget(AnimatedPressCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The tween used to be built once in initState, so a theme change — a
+    // different pressedScale, or reduced motion switching on — went unnoticed
+    // for the lifetime of the card.
+    if (widget.pressAnimationDuration != oldWidget.pressAnimationDuration) {
+      _controller.duration = widget.pressAnimationDuration;
+    }
+    if (widget.pressedScale != oldWidget.pressedScale) {
+      _scale = _buildScale();
+      if (!_scales) _controller.value = 0;
+    }
   }
 
   @override
@@ -113,15 +145,15 @@ class _AnimatedPressCardState extends State<AnimatedPressCard>
   }
 
   void _onTapDown(TapDownDetails _) {
-    if (widget.onTap != null) _controller.forward();
+    if (widget.onTap != null && _scales) _controller.forward();
   }
 
   void _onTapUp(TapUpDetails _) {
-    if (widget.onTap != null) _controller.reverse();
+    if (widget.onTap != null && _scales) _controller.reverse();
   }
 
   void _onTapCancel() {
-    if (widget.onTap != null) _controller.reverse();
+    if (widget.onTap != null && _scales) _controller.reverse();
   }
 
   @override
@@ -174,6 +206,7 @@ class _AnimatedPressCardState extends State<AnimatedPressCard>
               // anything that is not.
               mouseCursor: active ? widget.clickableCursor : widget.inertCursor,
               onHover: (isHovering) {
+                if (_hovered == isHovering) return;
                 setState(() => _hovered = isHovering);
               },
               hoverColor:

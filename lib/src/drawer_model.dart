@@ -36,9 +36,21 @@ class DrawerBadge {
   /// Count badges are rendered with an accent color to draw attention (see
   /// `DrawerRailTheme.badgeCountColor`).
   bool get isCount => count != null;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DrawerBadge && other.text == text && other.count == count;
+
+  @override
+  int get hashCode => Object.hash(text, count);
+
+  @override
+  String toString() =>
+      isCount ? 'DrawerBadge.count($count)' : 'DrawerBadge.text($text)';
 }
 
-/// The base class for everything that can appear in a [NovaDrawer].
+/// The base class for everything that can appear in a [DrawerRail].
 ///
 /// This type is `sealed`, so callers must build the drawer out of one of its
 /// three concrete subtypes: [DrawerSection], [DrawerLink] or [DrawerGroup].
