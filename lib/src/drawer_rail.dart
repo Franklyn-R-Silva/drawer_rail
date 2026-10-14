@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import 'animated_press_card.dart';
 import 'drawer_model.dart';
@@ -66,6 +67,7 @@ class DrawerRail extends StatefulWidget {
     this.headerBuilder,
     this.footerBuilder,
     this.searchDecoration,
+    this.selectOnTap = true,
   });
 
   /// Holds and mutates the drawer's runtime state. Must be kept alive by the
@@ -106,6 +108,17 @@ class DrawerRail extends StatefulWidget {
   /// hint or suffix here.
   final InputDecoration? searchDecoration;
 
+  /// Whether tapping a link selects it before running its `onTap`. Defaults to
+  /// `true`.
+  ///
+  /// Set it to `false` when the app drives the selection itself — from the
+  /// current route, typically, by calling [DrawerRailController.select] as the
+  /// location changes. Selecting on tap fights that: a link that pushes a
+  /// route marks itself in the menu of the screen underneath, which stays
+  /// mounted below the new one and is still showing the wrong item once the
+  /// user comes back.
+  final bool selectOnTap;
+
   @override
   State<DrawerRail> createState() => _DrawerRailState();
 }
@@ -134,6 +147,10 @@ class _DrawerRailState extends State<DrawerRail> {
   /// more than one of them mid-close at the same time.
   final _hoverOpenedGroupIds = <String>{};
 
+  /// The rail flyouts hover opened — the flyout counterpart of
+  /// [_hoverOpenedGroupIds]. Only these close again when the pointer leaves.
+  final _hoverOpenedMenuIds = <String>{};
+
   /// One [MenuController] per group id, so the flyout can be driven from both
   /// the rail button and the menu panel.
   final _menuControllers = <String, MenuController>{};
@@ -142,14 +159,55 @@ class _DrawerRailState extends State<DrawerRail> {
   /// the edge rather than on every notification.
   late bool _wasPinnedCollapsed;
 
+  /// The last [DrawerRailController.hoverHeld] seen, so a release can be told
+  /// apart from every other notification.
+  late bool _wasHeld;
+
+  /// Whether the pointer is over the drawer right now.
+  bool _pointerInside = false;
+
+  /// Whether a hover close was put off — by a focused search field or by
+  /// [DrawerRailController.hoverHeld] — so it can run once nothing holds the
+  /// drawer any more. Only a close that really was put off runs: a keyboard
+  /// user tabbing out of the field, with the pointer never having left the
+  /// drawer (or never been on it), must not close anything.
+  bool _closeDeferred = false;
+
+  /// Whether the panel is open only because the rail's search button opened
+  /// it, and whether doing so undid an auto-hide that must come back after.
+  bool _searchPeek = false;
+  bool _searchPeekUnhid = false;
+
+  /// The theme of the last build, for the deferred close, which runs outside
+  /// of one.
+  ResolvedDrawerRailTheme? _lastTheme;
+
   @override
   void initState() {
     super.initState();
     _wasPinnedCollapsed = widget.controller.collapsed;
+    _wasHeld = widget.controller.hoverHeld;
     widget.controller.addListener(_onControllerChanged);
+    _searchFocus.addListener(_runDeferredClose);
   }
 
-  /// Drops a running search when the user pins the drawer collapsed.
+  /// Whether something is keeping the drawer open against hover: someone
+  /// typing in the search field, or the app holding it via
+  /// [DrawerRailController.setHoverHold].
+  bool get _heldOpen => _searchFocus.hasFocus || _controller.hoverHeld;
+
+  /// Runs the hover close that [_onDrawerHover] put off, once nothing holds the
+  /// drawer open any more and the pointer is still away.
+  void _runDeferredClose() {
+    final theme = _lastTheme;
+    if (!mounted || theme == null || !_closeDeferred) return;
+    if (_pointerInside || _heldOpen) return;
+    _closeDeferred = false;
+    _onDrawerHover(false, theme);
+  }
+
+  /// Drops a running search when the user pins the drawer collapsed, and runs
+  /// a close put off by [DrawerRailController.setHoverHold] once released.
   ///
   /// The search field is not on screen in the rail, so a query left running
   /// there would silently filter the panel the next time it is expanded, with
@@ -157,6 +215,11 @@ class _DrawerRailState extends State<DrawerRail> {
   /// auto-hide is deliberately *not* treated as collapsing: those are transient
   /// and must not throw away what someone typed.
   void _onControllerChanged() {
+    final held = _controller.hoverHeld;
+    if (held != _wasHeld) {
+      _wasHeld = held;
+      if (!held) _runDeferredClose();
+    }
     final pinned = widget.controller.collapsed;
     if (pinned == _wasPinnedCollapsed) return;
     _wasPinnedCollapsed = pinned;
@@ -173,8 +236,17 @@ class _DrawerRailState extends State<DrawerRail> {
     super.didUpdateWidget(oldWidget);
     if (!identical(widget.controller, oldWidget.controller)) {
       oldWidget.controller.removeListener(_onControllerChanged);
+      // The old controller is being let go mid-peek just as surely as on
+      // teardown, so it gets the same clean hand-back.
+      _releaseHoverState(oldWidget.controller);
       widget.controller.addListener(_onControllerChanged);
       _wasPinnedCollapsed = widget.controller.collapsed;
+      _wasHeld = widget.controller.hoverHeld;
+      // Whatever was in flight belonged to the old controller; applied to the
+      // new one it would hide or close a drawer that never opened that way.
+      _searchPeek = false;
+      _searchPeekUnhid = false;
+      _closeDeferred = false;
     }
     if (identical(widget.entries, oldWidget.entries)) return;
     // Entries can be rebuilt at will, so forget the per-group bookkeeping of
@@ -195,6 +267,7 @@ class _DrawerRailState extends State<DrawerRail> {
       return true;
     });
     _hoverOpenedGroupIds.removeWhere((id) => !ids.contains(id));
+    _hoverOpenedMenuIds.removeWhere((id) => !ids.contains(id));
   }
 
   @override
@@ -204,15 +277,36 @@ class _DrawerRailState extends State<DrawerRail> {
     // mid-peek used to leave the controller claiming to be peeked open for
     // good, so a controller that outlives the drawer — one hoisted above the
     // navigator, say — reported the wrong railCollapsed from then on.
-    widget.controller.resetHoverState();
+    _releaseHoverState(widget.controller);
     _peekTimer?.cancel();
     _linkTimer?.cancel();
     for (final timer in [..._groupTimers.values, ..._menuTimers.values]) {
       timer.cancel();
     }
     _searchController.dispose();
-    _searchFocus.dispose();
+    _searchFocus
+      ..removeListener(_runDeferredClose)
+      ..dispose();
     super.dispose();
+  }
+
+  /// Clears the hover state this widget left on [controller], once the frame
+  /// is over.
+  ///
+  /// Not on the spot: this runs from [dispose] and [didUpdateWidget], where the
+  /// framework has the tree locked or mid-build, and the reset notifies — so
+  /// any shell that rebuilds on the controller (the usual way to size a gutter
+  /// beside the drawer) threw "setState() called when widget tree was locked"
+  /// the moment the drawer left the tree mid-peek.
+  void _releaseHoverState(DrawerRailController controller) {
+    if (!controller.hoverPeeking &&
+        !controller.hoverHidden &&
+        !controller.hoverHeld) {
+      return;
+    }
+    SchedulerBinding.instance
+      ..addPostFrameCallback((_) => controller.resetHoverState())
+      ..ensureVisualUpdate();
   }
 
   DrawerRailController get _controller => widget.controller;
@@ -247,7 +341,48 @@ class _DrawerRailState extends State<DrawerRail> {
   /// peek in flight so a pending timer cannot undo the click a frame later.
   void _pinCollapsed(bool value) {
     _peekTimer?.cancel();
+    _searchPeek = false;
     _controller.setCollapsed(value);
+  }
+
+  /// Opens the panel from the rail's search button for the length of a search
+  /// — the transient equivalent of a hover peek — and focuses the field.
+  ///
+  /// It used to *pin* the panel open, so searching from a rail the user had
+  /// pinned collapsed silently rewrote that preference: an app persisting
+  /// [DrawerRailController.collapsed] saved "expanded" because someone looked
+  /// something up.
+  void _openSearchFromRail() {
+    _peekTimer?.cancel();
+    _searchPeek = true;
+    _searchPeekUnhid = _controller.hoverHidden;
+    _controller.setHoverHidden(false);
+    if (_controller.collapsed) _controller.setHoverPeek(true);
+    // The drawer can leave the tree before that frame ends (the tap
+    // navigated, say), and the focus node is disposed with it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _searchFocus.requestFocus();
+    });
+  }
+
+  /// Ends a search the rail's button opened — a result was chosen, or a tap
+  /// landed outside the drawer — and puts back the rail the user pinned.
+  void _endSearchPeek() {
+    if (!_searchPeek) return;
+    // An overlay the app holds the drawer open for — a header menu, say — is
+    // drawn outside the drawer, so a tap inside it reads as a tap outside.
+    // While held, that is not the user leaving the search.
+    if (_controller.hoverHeld) return;
+    _searchPeek = false;
+    // Under hover, a pointer still on the drawer owns the close from here, just
+    // as for a peek it opened itself.
+    final hover = _lastTheme?.railTrigger == DrawerActivationMode.hover;
+    if (hover && _pointerInside) return;
+    _peekTimer?.cancel();
+    _controller.setHoverPeek(false);
+    if (_searchPeekUnhid && !_controller.collapsed) {
+      _controller.setHoverHidden(true);
+    }
   }
 
   /// (A) Pointer entering/leaving the drawer opens or closes it.
@@ -257,7 +392,18 @@ class _DrawerRailState extends State<DrawerRail> {
   /// two happened, and with `railAutoCollapse` also hides a drawer the user
   /// left expanded.
   void _onDrawerHover(bool entered, ResolvedDrawerRailTheme theme) {
+    _pointerInside = entered;
+    if (entered) _closeDeferred = false;
     if (theme.railTrigger != DrawerActivationMode.hover) return;
+    // Someone typing in the search field, or working in an overlay the app
+    // holds the drawer open for, is still using it wherever the pointer has
+    // drifted: closing it pulled the field — or the menu's anchor — out from
+    // under them. The close waits until nothing holds the drawer instead.
+    if (!entered && _heldOpen) {
+      _peekTimer?.cancel();
+      _closeDeferred = true;
+      return;
+    }
     final pinnedOpen = !_controller.collapsed;
     if (!entered && pinnedOpen && !theme.railAutoCollapse) return;
 
@@ -273,6 +419,8 @@ class _DrawerRailState extends State<DrawerRail> {
         if (_controller.collapsed) _controller.setHoverPeek(true);
         return;
       }
+      // Hover has closed it, so a search the rail button opened is over too.
+      _searchPeek = false;
       _controller.setHoverPeek(false);
       if (pinnedOpen) _controller.setHoverHidden(true);
       // A group hover opened inside the panel must not still be sitting open
@@ -329,29 +477,44 @@ class _DrawerRailState extends State<DrawerRail> {
       _menuTimers,
       group.id,
       entered ? theme.hoverOpenDelay : theme.hoverCloseDelay,
-      () => entered
-          ? _openMenu(group.id, menu, hasItems: group.children.isNotEmpty)
-          : menu.close(),
+      () {
+        if (entered) {
+          if (menu.isOpen) return;
+          final opened = _openMenu(
+            group.id,
+            menu,
+            hasItems: group.children.isNotEmpty,
+          );
+          if (opened) _hoverOpenedMenuIds.add(group.id);
+        } else if (_hoverOpenedMenuIds.remove(group.id)) {
+          // Only what hover opened, as with inline groups: a flyout the user
+          // clicked open used to slam shut the moment the pointer left it.
+          menu.close();
+        }
+      },
     );
   }
 
   /// Opens [menu] and shuts every other flyout at once, so sliding down the
-  /// rail never leaves a trail of overlays hanging over the app.
+  /// rail never leaves a trail of overlays hanging over the app. Returns
+  /// whether it opened anything.
   ///
   /// A group with no children opens nothing: an empty flyout is a bare sliver
   /// of surface that the user then has to dismiss.
-  void _openMenu(
+  bool _openMenu(
     String groupId,
     MenuController menu, {
     required bool hasItems,
   }) {
-    if (!hasItems) return;
+    if (!hasItems) return false;
     for (final entry in _menuControllers.entries) {
       if (entry.key == groupId) continue;
       _menuTimers.remove(entry.key)?.cancel();
+      _hoverOpenedMenuIds.remove(entry.key);
       if (entry.value.isOpen) entry.value.close();
     }
     menu.open();
+    return true;
   }
 
   /// (D) Pointer resting on a link activates it, navigation included.
@@ -395,6 +558,7 @@ class _DrawerRailState extends State<DrawerRail> {
       scheme,
       reduceMotion: MediaQuery.disableAnimationsOf(context),
     );
+    _lastTheme = theme;
 
     return AnimatedBuilder(
       animation: _controller,
@@ -404,58 +568,74 @@ class _DrawerRailState extends State<DrawerRail> {
         final collapsed = _controller.railCollapsed;
         final width = collapsed ? theme.railWidth : theme.expandedWidth;
 
-        return MouseRegion(
-          // The drawer's own chrome is inert, so the pointer reverts to an
-          // arrow the moment it leaves an item instead of carrying the hand
-          // cursor across the background.
-          cursor: theme.inertCursor,
-          onEnter: (_) => _onDrawerHover(true, theme),
-          onExit: (_) => _onDrawerHover(false, theme),
-          child: AnimatedContainer(
-            duration: theme.animationDuration,
-            curve: theme.animationCurve,
-            width: width,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: theme.backgroundColor,
-              borderRadius: theme.position == DrawerRailPosition.right
-                  ? BorderRadius.horizontal(
-                      left: Radius.circular(theme.borderRadius),
-                    )
-                  : BorderRadius.horizontal(
-                      right: Radius.circular(theme.borderRadius),
-                    ),
-              boxShadow: theme.shadow,
-            ),
-            // Lay content out at its *target* width regardless of the
-            // animating container width, so the tween never squeezes it (no
-            // mid-animation ellipsis, no items sliding sideways); the container
-            // clips the reveal. `minWidth: 0` is what makes that true — without
-            // it the tight width of the animating container is inherited as a
-            // floor and the content is laid out at the animating width after
-            // all, then centred.
-            child: OverflowBox(
-              alignment: theme.position == DrawerRailPosition.right
-                  ? Alignment.centerRight
-                  : Alignment.centerLeft,
-              minWidth: 0,
-              maxWidth: double.infinity,
-              child: SizedBox(
-                width: width,
-                child: Material(
-                  type: MaterialType.transparency,
-                  child: SafeArea(
-                    child: Column(
-                      children: [
-                        _buildHeader(collapsed, theme),
-                        if (widget.showSearch) _buildSearch(collapsed, theme),
-                        Expanded(child: _buildMenu(collapsed, theme)),
-                        if (widget.footerBuilder != null) ...[
-                          if (widget.showFooterDivider)
-                            const Divider(height: 1),
-                          widget.footerBuilder!(context, collapsed),
-                        ],
-                      ],
+        // A tap anywhere else ends a search the rail's button opened.
+        return TapRegion(
+          onTapOutside: (_) => _endSearchPeek(),
+          child: MouseRegion(
+            // The drawer's own chrome is inert, so the pointer reverts to an
+            // arrow the moment it leaves an item instead of carrying the hand
+            // cursor across the background.
+            cursor: theme.inertCursor,
+            onEnter: (_) => _onDrawerHover(true, theme),
+            onExit: (_) => _onDrawerHover(false, theme),
+            child: AnimatedContainer(
+              duration: theme.animationDuration,
+              curve: theme.animationCurve,
+              width: width,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: theme.backgroundColor,
+                borderRadius: theme.position == DrawerRailPosition.right
+                    ? BorderRadius.horizontal(
+                        left: Radius.circular(theme.borderRadius),
+                      )
+                    : BorderRadius.horizontal(
+                        right: Radius.circular(theme.borderRadius),
+                      ),
+                boxShadow: theme.shadow,
+              ),
+              // Lay content out at its *target* width regardless of the
+              // animating container width, so the tween never squeezes it (no
+              // mid-animation ellipsis, no items sliding sideways); the container
+              // clips the reveal. `minWidth: 0` is what makes that true — without
+              // it the tight width of the animating container is inherited as a
+              // floor and the content is laid out at the animating width after
+              // all, then centred.
+              child: OverflowBox(
+                alignment: theme.position == DrawerRailPosition.right
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+                minWidth: 0,
+                maxWidth: double.infinity,
+                child: SizedBox(
+                  width: width,
+                  child: Material(
+                    type: MaterialType.transparency,
+                    // Only the outer edge touches the screen's edge. Honouring
+                    // the inset on the inner one too — a landscape notch on the
+                    // far side, say — knocked the rail icons off centre in a
+                    // rail barely wider than the inset itself.
+                    child: SafeArea(
+                      left: theme.position == DrawerRailPosition.left,
+                      right: theme.position == DrawerRailPosition.right,
+                      // Navigation is not text to be copied. Under an app-wide
+                      // SelectionArea, a drag across the drawer used to leave a
+                      // selection highlight trailing over every label.
+                      child: SelectionContainer.disabled(
+                        child: Column(
+                          children: [
+                            _buildHeader(collapsed, theme),
+                            if (widget.showSearch)
+                              _buildSearch(collapsed, theme),
+                            Expanded(child: _buildMenu(collapsed, theme)),
+                            if (widget.footerBuilder != null) ...[
+                              if (widget.showFooterDivider)
+                                Divider(height: 1, color: theme.dividerColor),
+                              widget.footerBuilder!(context, collapsed),
+                            ],
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -475,34 +655,34 @@ class _DrawerRailState extends State<DrawerRail> {
       return const SizedBox.shrink();
     }
 
-    if (collapsed) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (header != null) header,
-            if (widget.showCollapseButton)
-              IconButton(
-                tooltip: widget.labels.expandTooltip,
-                icon: Icon(theme.expandIcon),
-                onPressed: () => _pinCollapsed(false),
-              ),
-          ],
-        ),
-      );
-    }
-
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
-      child: Row(
+      padding: collapsed
+          ? const EdgeInsets.symmetric(vertical: 12)
+          : const EdgeInsets.fromLTRB(16, 12, 8, 8),
+      // One Flex that turns on its side, rather than a Column swapped for a
+      // Row: the header keeps its place in the tree across a collapse, so
+      // whatever state it holds survives the drawer changing shape. Apps had to
+      // pin a GlobalKey on a header menu because the swap tore it down — and
+      // closed it — the moment a hover peek ended.
+      child: Flex(
+        direction: collapsed ? Axis.vertical : Axis.horizontal,
+        mainAxisSize: collapsed ? MainAxisSize.min : MainAxisSize.max,
         children: [
-          if (header != null) Expanded(child: header) else const Spacer(),
+          Flexible(
+            // Flex 0 lays the header out at its own size in the rail; in the
+            // panel it takes the room left of the button.
+            flex: collapsed ? 0 : 1,
+            fit: FlexFit.tight,
+            child: header ?? const SizedBox.shrink(),
+          ),
           if (widget.showCollapseButton)
             IconButton(
-              tooltip: widget.labels.collapseTooltip,
-              icon: Icon(theme.collapseIcon),
-              onPressed: () => _pinCollapsed(true),
+              tooltip: collapsed
+                  ? widget.labels.expandTooltip
+                  : widget.labels.collapseTooltip,
+              color: theme.mutedColor,
+              icon: Icon(collapsed ? theme.expandIcon : theme.collapseIcon),
+              onPressed: () => _pinCollapsed(!collapsed),
             ),
         ],
       ),
@@ -517,19 +697,20 @@ class _DrawerRailState extends State<DrawerRail> {
         padding: const EdgeInsets.only(bottom: 4),
         child: IconButton(
           tooltip: widget.labels.searchTooltip,
+          color: theme.mutedColor,
           icon: Icon(theme.searchIcon),
-          onPressed: () {
-            _pinCollapsed(false);
-            WidgetsBinding.instance
-                .addPostFrameCallback((_) => _searchFocus.requestFocus());
-          },
+          onPressed: _openSearchFromRail,
         ),
       );
     }
     final base = widget.searchDecoration ??
         InputDecoration(
           isDense: true,
-          prefixIcon: Icon(theme.searchIcon, size: theme.iconSize),
+          prefixIcon: Icon(
+            theme.searchIcon,
+            size: theme.iconSize,
+            color: theme.mutedColor,
+          ),
           filled: true,
           fillColor: theme.searchFillColor,
           border: OutlineInputBorder(
@@ -544,11 +725,16 @@ class _DrawerRailState extends State<DrawerRail> {
         focusNode: _searchFocus,
         onChanged: (v) => setState(() => _query = v),
         textInputAction: TextInputAction.search,
+        // Typed text follows the labels rather than the ambient text theme,
+        // which on a dark drawer in a light app came out dark on dark.
+        style: TextStyle(color: theme.labelColor),
         decoration: base.copyWith(
           hintText: base.hintText ?? widget.labels.searchHint,
+          hintStyle: base.hintStyle ?? TextStyle(color: theme.mutedColor),
           suffixIcon: _query.isEmpty
               ? base.suffixIcon
               : IconButton(
+                  color: theme.mutedColor,
                   icon: Icon(theme.clearSearchIcon, size: 18),
                   onPressed: _clearSearch,
                 ),
@@ -586,7 +772,7 @@ class _DrawerRailState extends State<DrawerRail> {
             child: Text(
               widget.labels.noResults,
               textAlign: TextAlign.center,
-              style: TextStyle(color: theme.surfaceVariantColor),
+              style: TextStyle(color: theme.mutedColor),
             ),
           ),
         );
@@ -616,9 +802,9 @@ class _DrawerRailState extends State<DrawerRail> {
   ) {
     return switch (e) {
       DrawerSection(:final label) => collapsed
-          ? const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Divider(height: 1),
+          ? Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Divider(height: 1, color: theme.dividerColor),
             )
           : Padding(
               padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
@@ -644,8 +830,19 @@ class _DrawerRailState extends State<DrawerRail> {
     ResolvedDrawerRailTheme theme, {
     required bool indent,
   }) {
-    final tint = link.danger ? theme.errorColor : theme.labelColor;
-    final fg = isSelected ? theme.onSelectedColor : tint;
+    // Icon and label are tinted separately: the icon used to take labelColor
+    // too, so iconColor reached group headers and the rail but never a link in
+    // the panel.
+    final Color iconFg;
+    final Color fg;
+    if (isSelected) {
+      iconFg = fg = theme.onSelectedColor;
+    } else if (link.danger) {
+      iconFg = fg = theme.errorColor;
+    } else {
+      iconFg = theme.iconColor;
+      fg = theme.labelColor;
+    }
     final baseStyle =
         isSelected ? theme.selectedLabelTextStyle : theme.labelTextStyle;
     return Padding(
@@ -667,6 +864,7 @@ class _DrawerRailState extends State<DrawerRail> {
           hoverAnimationCurve: theme.hoverAnimationCurve,
           clickableCursor: theme.clickableCursor,
           inertCursor: theme.inertCursor,
+          focusColor: theme.focusColor,
           surfaceColor: theme.backgroundColor,
           baseColor: isSelected ? theme.selectedColor : Colors.transparent,
           borderRadius:
@@ -678,7 +876,11 @@ class _DrawerRailState extends State<DrawerRail> {
             ),
             child: Row(
               children: [
-                Icon(link.icon, size: theme.iconSize, color: fg),
+                Icon(
+                  isSelected ? link.selectedIcon ?? link.icon : link.icon,
+                  size: theme.iconSize,
+                  color: iconFg,
+                ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Text(
@@ -723,6 +925,7 @@ class _DrawerRailState extends State<DrawerRail> {
               hoverAnimationCurve: theme.hoverAnimationCurve,
               clickableCursor: theme.clickableCursor,
               inertCursor: theme.inertCursor,
+              focusColor: theme.focusColor,
               surfaceColor: theme.backgroundColor,
               baseColor: Colors.transparent,
               borderRadius:
@@ -732,7 +935,9 @@ class _DrawerRailState extends State<DrawerRail> {
                 child: Row(
                   children: [
                     Icon(
-                      group.icon,
+                      group.contains(selected)
+                          ? group.selectedIcon ?? group.icon
+                          : group.icon,
                       size: theme.iconSize,
                       color: theme.iconColor,
                     ),
@@ -754,7 +959,7 @@ class _DrawerRailState extends State<DrawerRail> {
                       curve: theme.groupAnimationCurve,
                       child: Icon(
                         theme.groupTrailingIcon,
-                        color: theme.surfaceVariantColor,
+                        color: theme.mutedColor,
                       ),
                     ),
                   ],
@@ -762,33 +967,55 @@ class _DrawerRailState extends State<DrawerRail> {
               ),
             ),
           ),
-          AnimatedCrossFade(
-            firstChild: const SizedBox(width: double.infinity),
-            secondChild: Column(
-              children: [
-                for (final child in group.children)
-                  _linkTile(child, selected == child.id, theme, indent: true),
-              ],
-            ),
-            crossFadeState:
-                open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-            duration: theme.groupAnimationDuration,
-            // Without these the reveal defaults to a linear height tween, which
-            // reads as mechanical next to the eased width animation.
-            sizeCurve: theme.groupAnimationCurve,
-            firstCurve: theme.groupAnimationCurve,
-            secondCurve: theme.groupAnimationCurve,
-          ),
+          _groupReveal(group, open, selected, theme),
         ],
       ),
     );
   }
 
+  /// The children of an inline group, revealed or hidden.
+  Widget _groupReveal(
+    DrawerGroup group,
+    bool open,
+    String? selected,
+    ResolvedDrawerRailTheme theme,
+  ) {
+    final children = Column(
+      children: [
+        for (final child in group.children)
+          _linkTile(child, selected == child.id, theme, indent: true),
+      ],
+    );
+    // With no time to animate in — reduced motion, or a zero duration set on
+    // purpose — the children are simply there or not. AnimatedCrossFade's
+    // AnimatedSize cannot run at a zero duration: it mutates itself inside its
+    // own layout and trips a framework assertion the moment a group opens.
+    if (theme.groupAnimationDuration == Duration.zero) {
+      return open ? children : const SizedBox(width: double.infinity);
+    }
+    return AnimatedCrossFade(
+      firstChild: const SizedBox(width: double.infinity),
+      secondChild: children,
+      crossFadeState:
+          open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+      duration: theme.groupAnimationDuration,
+      // Without these the reveal defaults to a linear height tween, which
+      // reads as mechanical next to the eased width animation.
+      sizeCurve: theme.groupAnimationCurve,
+      firstCurve: theme.groupAnimationCurve,
+      secondCurve: theme.groupAnimationCurve,
+    );
+  }
+
   /// Toggles a group from an explicit click, which also *pins* it: a group the
   /// user clicked open must not close just because the pointer left.
+  ///
+  /// A click on a group hover already opened pins it as it is. Hover opens
+  /// after [DrawerRailTheme.hoverOpenDelay] — quicker than anyone clicks — so
+  /// toggling there shut nearly every group the user was reaching to open.
   void _toggleGroup(DrawerGroup group) {
     _groupTimers.remove(group.id)?.cancel();
-    _hoverOpenedGroupIds.remove(group.id);
+    if (_hoverOpenedGroupIds.remove(group.id)) return;
     _controller.toggleGroup(group.id);
   }
 
@@ -803,7 +1030,7 @@ class _DrawerRailState extends State<DrawerRail> {
       onEnter: (_) => _onLinkHover(true, link, theme),
       onExit: (_) => _onLinkHover(false, link, theme),
       child: _RailButton(
-        icon: link.icon,
+        icon: isSelected ? link.selectedIcon ?? link.icon : link.icon,
         tooltip: link.label,
         selected: isSelected,
         danger: link.danger,
@@ -828,6 +1055,9 @@ class _DrawerRailState extends State<DrawerRail> {
     final appDirection = Directionality.of(context);
     final anchored = MenuAnchor(
       controller: menu,
+      // The flyout also closes on its own — a tap outside, Escape, an item
+      // chosen — and must not be remembered as hover-opened after that.
+      onClose: () => _hoverOpenedMenuIds.remove(group.id),
       // Open beside the rail, not below the button: the default placement drops
       // the flyout straight over the next rail buttons, so the group underneath
       // an open group could not be reached at all — fatal with hover, where the
@@ -853,18 +1083,7 @@ class _DrawerRailState extends State<DrawerRail> {
             onExit: (_) => _onMenuHover(false, group, menu, theme),
             child: Directionality(
               textDirection: appDirection,
-              child: MenuItemButton(
-                style: ButtonStyle(
-                  mouseCursor: WidgetStatePropertyAll(theme.clickableCursor),
-                ),
-                leadingIcon: Icon(
-                  child.icon,
-                  size: theme.iconSize,
-                  color: theme.iconColor,
-                ),
-                onPressed: () => _openLink(child),
-                child: Text(child.label),
-              ),
+              child: _flyoutItem(child, selected == child.id, theme),
             ),
           ),
       ],
@@ -872,22 +1091,26 @@ class _DrawerRailState extends State<DrawerRail> {
         onEnter: (_) => _onMenuHover(true, group, controller, theme),
         onExit: (_) => _onMenuHover(false, group, controller, theme),
         child: _RailButton(
-          icon: group.icon,
+          icon: group.contains(selected)
+              ? group.selectedIcon ?? group.icon
+              : group.icon,
           tooltip: group.label,
-          selected: group.children.any((c) => c.id == selected),
+          selected: group.contains(selected),
           theme: theme,
           badge: group.badge,
           onTap: () {
             _menuTimers.remove(group.id)?.cancel();
-            if (controller.isOpen) {
-              controller.close();
-            } else {
+            if (!controller.isOpen) {
               _openMenu(
                 group.id,
                 controller,
                 hasItems: group.children.isNotEmpty,
               );
+            } else if (!_hoverOpenedMenuIds.remove(group.id)) {
+              controller.close();
             }
+            // Otherwise hover opened it and the click pins it, exactly as
+            // _toggleGroup does for an inline group.
           },
         ),
       ),
@@ -899,6 +1122,48 @@ class _DrawerRailState extends State<DrawerRail> {
     // own direction so the icons and text still read normally.
     if (!onRight) return anchored;
     return Directionality(textDirection: TextDirection.rtl, child: anchored);
+  }
+
+  /// A link inside a rail group's flyout, styled like its counterpart in the
+  /// panel. Flyout items used to be plain menu entries in the ambient text
+  /// color: no selected pill, no danger tint, no badge, and labelColor
+  /// ignored.
+  Widget _flyoutItem(
+    DrawerLink link,
+    bool isSelected,
+    ResolvedDrawerRailTheme theme,
+  ) {
+    final Color iconFg;
+    final Color fg;
+    if (isSelected) {
+      iconFg = fg = theme.onSelectedColor;
+    } else if (link.danger) {
+      iconFg = fg = theme.errorColor;
+    } else {
+      iconFg = theme.iconColor;
+      fg = theme.labelColor;
+    }
+    final style =
+        isSelected ? theme.selectedLabelTextStyle : theme.labelTextStyle;
+    return MenuItemButton(
+      style: ButtonStyle(
+        mouseCursor: WidgetStatePropertyAll(theme.clickableCursor),
+        backgroundColor:
+            isSelected ? WidgetStatePropertyAll(theme.selectedColor) : null,
+        foregroundColor: WidgetStatePropertyAll(fg),
+        iconColor: WidgetStatePropertyAll(iconFg),
+      ),
+      leadingIcon: Icon(
+        isSelected ? link.selectedIcon ?? link.icon : link.icon,
+        size: theme.iconSize,
+        color: iconFg,
+      ),
+      trailingIcon: link.badge?.label == null
+          ? null
+          : _badge(link.badge!, isSelected, theme),
+      onPressed: () => _openLink(link),
+      child: Text(link.label, style: style.copyWith(color: fg)),
+    );
   }
 
   // ---- Shared bits ---------------------------------------------------------
@@ -929,7 +1194,9 @@ class _DrawerRailState extends State<DrawerRail> {
   void _openLink(DrawerLink link) {
     // A click beats a hover dwell still counting down on some other item.
     _linkTimer?.cancel();
-    _controller.select(link.id);
+    // A result chosen from a search the rail button opened ends that search.
+    _endSearchPeek();
+    if (widget.selectOnTap) _controller.select(link.id);
     link.onTap(context);
   }
 }
@@ -944,7 +1211,7 @@ const double _railButtonInset = 10;
 
 /// A single icon button in the collapsed rail: tooltip, selected pill and an
 /// optional badge dot.
-class _RailButton extends StatelessWidget {
+class _RailButton extends StatefulWidget {
   const _RailButton({
     required this.icon,
     required this.tooltip,
@@ -964,10 +1231,45 @@ class _RailButton extends StatelessWidget {
   final DrawerBadge? badge;
 
   @override
+  State<_RailButton> createState() => _RailButtonState();
+}
+
+class _RailButtonState extends State<_RailButton> {
+  final _tooltip = GlobalKey<TooltipState>();
+  bool _tooltipFromFocus = false;
+
+  /// A rail button is an icon and nothing else, so its tooltip *is* its label.
+  /// A pointer gets it on hover; keyboard focus used to get nothing, leaving
+  /// someone tabbing down the rail to guess what each icon does.
+  void _onFocusChange(bool focused) {
+    if (!focused) {
+      // A tooltip shown with ensureTooltipVisible stays up until dismissed,
+      // and Tooltip offers no way to dismiss just one. So this is global —
+      // but it only runs when focus leaves a button whose tooltip focus
+      // itself put up.
+      if (_tooltipFromFocus) Tooltip.dismissAllToolTips();
+      _tooltipFromFocus = false;
+      return;
+    }
+    if (FocusManager.instance.highlightMode != FocusHighlightMode.traditional) {
+      return;
+    }
+    // After the focus change has settled: the button losing focus dismisses
+    // tooltips in the same pass, and must not take this one with it.
+    scheduleMicrotask(() {
+      if (!mounted) return;
+      _tooltipFromFocus =
+          _tooltip.currentState?.ensureTooltipVisible() ?? false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final fg = selected
+    final theme = widget.theme;
+    final badge = widget.badge;
+    final fg = widget.selected
         ? theme.onSelectedColor
-        : (danger ? theme.errorColor : theme.iconColor);
+        : (widget.danger ? theme.errorColor : theme.iconColor);
     final showDot = badge?.label != null;
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -975,48 +1277,58 @@ class _RailButton extends StatelessWidget {
         horizontal: _railButtonInset,
       ),
       child: Tooltip(
-        message: tooltip,
-        child: AnimatedPressCard(
-          onTap: onTap,
-          pressedScale: theme.pressedScale,
-          pressAnimationDuration: theme.pressAnimationDuration,
-          hoverEffect: theme.hoverEffect,
-          hoverShadowColor: theme.hoverShadowColor,
-          hoverHighlightColor: theme.hoverHighlightColor,
-          hoverAnimationDuration: theme.hoverAnimationDuration,
-          hoverAnimationCurve: theme.hoverAnimationCurve,
-          clickableCursor: theme.clickableCursor,
-          inertCursor: theme.inertCursor,
-          surfaceColor: theme.backgroundColor,
-          baseColor: selected ? theme.selectedColor : Colors.transparent,
-          borderRadius:
-              BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
-          child: SizedBox(
-            height: theme.railItemHeight,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Icon(icon, size: theme.railIconSize, color: fg),
-                if (showDot)
-                  Positioned(
-                    top: 8,
-                    right: 14,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: badge!.isCount
-                            ? theme.badgeCountColor
-                            : theme.selectedColor,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: theme.backgroundColor,
-                          width: 1.5,
+        key: _tooltip,
+        message: widget.tooltip,
+        // Reports focus landing on the button inside without being a focus
+        // stop of its own.
+        child: Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          onFocusChange: _onFocusChange,
+          child: AnimatedPressCard(
+            onTap: widget.onTap,
+            pressedScale: theme.pressedScale,
+            pressAnimationDuration: theme.pressAnimationDuration,
+            hoverEffect: theme.hoverEffect,
+            hoverShadowColor: theme.hoverShadowColor,
+            hoverHighlightColor: theme.hoverHighlightColor,
+            hoverAnimationDuration: theme.hoverAnimationDuration,
+            hoverAnimationCurve: theme.hoverAnimationCurve,
+            clickableCursor: theme.clickableCursor,
+            inertCursor: theme.inertCursor,
+            focusColor: theme.focusColor,
+            surfaceColor: theme.backgroundColor,
+            baseColor:
+                widget.selected ? theme.selectedColor : Colors.transparent,
+            borderRadius:
+                BorderRadius.all(Radius.circular(theme.itemBorderRadius)),
+            child: SizedBox(
+              height: theme.railItemHeight,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(widget.icon, size: theme.railIconSize, color: fg),
+                  if (showDot)
+                    Positioned(
+                      top: 8,
+                      right: 14,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: badge!.isCount
+                              ? theme.badgeCountColor
+                              : theme.selectedColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: theme.backgroundColor,
+                            width: 1.5,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

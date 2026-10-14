@@ -162,6 +162,25 @@ void main() {
     });
   });
 
+  group('DrawerRailController.setHoverHold', () {
+    test('holds and releases without touching the pinned state', () {
+      final controller = DrawerRailController(collapsed: true);
+      addTearDown(controller.dispose);
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+
+      controller.setHoverHold(true);
+      expect(controller.hoverHeld, isTrue);
+      controller.setHoverHold(true);
+      expect(notifications, 1, reason: 'same value, no notification');
+
+      controller.setHoverHold(false);
+      expect(controller.hoverHeld, isFalse);
+      expect(controller.collapsed, isTrue);
+      expect(notifications, 2);
+    });
+  });
+
   group('DrawerRailController.resetHoverState', () {
     test('clears both hover flags without touching the pinned state', () {
       final controller = DrawerRailController(collapsed: true);
@@ -178,6 +197,16 @@ void main() {
 
       controller.resetHoverState();
       expect(notifications, 1, reason: 'nothing left to clear');
+    });
+
+    test('also lets go of a hold, whose overlay went with the drawer', () {
+      final controller = DrawerRailController();
+      addTearDown(controller.dispose);
+      controller.setHoverHold(true);
+
+      controller.resetHoverState();
+
+      expect(controller.hoverHeld, isFalse);
     });
 
     test('is a no-op once the controller is disposed', () {
@@ -199,17 +228,31 @@ void main() {
       expect(copy.expandedWidth, 400, reason: 'untouched fields carry over');
     });
 
-    test('hoverAdaptive turns on rail and group hover but never links', () {
+    test('hoverAdaptive turns on rail hover, but never groups or links', () {
       final theme = DrawerRailTheme.hoverAdaptive();
 
       expect(theme.railTrigger, DrawerActivationMode.hover);
-      expect(theme.groupTrigger, DrawerActivationMode.hover);
+      expect(
+        theme.groupTrigger,
+        DrawerActivationMode.click,
+        reason: 'a group opening on the way to another item pushes that item '
+            'out from under the pointer — every app on the preset undid it',
+      );
       expect(theme.railAutoCollapse, isTrue);
       expect(
         theme.linkTrigger,
         DrawerActivationMode.click,
         reason: 'navigating on dwell is opt-in only — it is an a11y hazard',
       );
+    });
+
+    test('hoverAdaptive opens groups on hover when asked to', () {
+      final theme = DrawerRailTheme.hoverAdaptive(
+        groupTrigger: DrawerActivationMode.hover,
+      );
+
+      expect(theme.groupTrigger, DrawerActivationMode.hover);
+      expect(theme.railTrigger, DrawerActivationMode.hover);
     });
 
     test('hoverAdaptive layers over a base theme', () {
@@ -759,7 +802,9 @@ void main() {
           DrawerRail(
             controller: controller,
             entries: groupedEntries(),
-            theme: DrawerRailTheme.hoverAdaptive(),
+            theme: DrawerRailTheme.hoverAdaptive(
+              groupTrigger: DrawerActivationMode.hover,
+            ),
           ),
         ),
       );
@@ -1109,6 +1154,9 @@ void main() {
       );
 
       await tester.enterText(find.byType(TextField), 'sett');
+      // Done typing: a focused field holds the drawer open (see the test
+      // below), and this one is about what happens once it does close.
+      FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
 
       final gesture = await hoverOver(tester, find.byType(DrawerRail));
@@ -1272,5 +1320,714 @@ void main() {
       expect(br.topRight, Radius.zero);
       expect(br.bottomRight, Radius.zero);
     });
+
+    // ---- 0.6.0: bugs the consuming apps ran into ----------------------------
+
+    testWidgets('leaving the tree mid-peek does not break a listening shell',
+        (tester) async {
+      controller.setCollapsed(true);
+      Widget app({required bool drawer}) => MaterialApp(
+            home: Scaffold(
+              body: _ListeningShell(
+                controller: controller,
+                drawer: drawer
+                    ? DrawerRail(
+                        controller: controller,
+                        entries: entries(),
+                        theme: const DrawerRailTheme(
+                          railTrigger: DrawerActivationMode.hover,
+                        ),
+                      )
+                    : null,
+              ),
+            ),
+          );
+      await tester.pumpWidget(app(drawer: true));
+      final gesture = await hoverOver(tester, find.byType(DrawerRail));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(controller.hoverPeeking, isTrue);
+
+      await tester.pumpWidget(app(drawer: false));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'the reset used to notify from dispose, with the tree locked, '
+            'so a shell sizing its gutter off the controller threw',
+      );
+      expect(controller.hoverPeeking, isFalse);
+      expect(find.text('rail: true'), findsOneWidget);
+      await gesture.moveTo(const Offset(2000, 2000));
+    });
+
+    testWidgets('swapping the controller hands the old one back unpeeked',
+        (tester) async {
+      final other = DrawerRailController();
+      addTearDown(other.dispose);
+      controller.setCollapsed(true);
+      const theme = DrawerRailTheme(railTrigger: DrawerActivationMode.hover);
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(controller: controller, entries: entries(), theme: theme),
+        ),
+      );
+      final gesture = await hoverOver(tester, find.byType(DrawerRail));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(controller.hoverPeeking, isTrue);
+
+      await tester.pumpWidget(
+        _wrap(DrawerRail(controller: other, entries: entries(), theme: theme)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(controller.hoverPeeking, isFalse);
+      await gesture.moveTo(const Offset(2000, 2000));
+    });
+
+    testWidgets('iconColor reaches link icons in the panel', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: const DrawerRailTheme(
+              iconColor: Color(0xFF00AA00),
+              labelColor: Color(0xFFAA0000),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        tester.widget<Icon>(find.byIcon(Icons.home)).color,
+        const Color(0xFF00AA00),
+        reason: 'link icons used to take labelColor, so iconColor reached '
+            'group headers and the rail but never a link in the panel',
+      );
+      expect(
+        tester.widget<Text>(find.text('Home')).style?.color,
+        const Color(0xFFAA0000),
+      );
+    });
+
+    testWidgets('only the outer edge honours the safe-area inset',
+        (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(1200, 800),
+              padding: EdgeInsets.only(right: 47),
+            ),
+            child: Scaffold(
+              body: Row(
+                children: [
+                  DrawerRail(controller: controller, entries: entries()),
+                  const Spacer(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final rail = tester.getRect(find.byType(DrawerRail));
+      expect(
+        tester.getCenter(find.byIcon(Icons.home)).dx,
+        moreOrLessEquals(rail.center.dx, epsilon: 1),
+        reason: 'a notch on the far side used to pad the inner edge too, '
+            'knocking the rail icons off centre',
+      );
+    });
+
+    testWidgets('a focused search field holds a hover-opened panel open',
+        (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: DrawerRailTheme.hoverAdaptive(),
+          ),
+        ),
+      );
+      final gesture = await hoverOver(tester, find.byType(DrawerRail));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(TextField));
+      await tester.enterText(find.byType(TextField), 'sett');
+
+      // The pointer drifts off into the page while the user is still typing.
+      await gesture.moveTo(const Offset(2000, 2000));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+      expect(
+        controller.railCollapsed,
+        isFalse,
+        reason: 'the panel used to close mid-word, taking the field with it',
+      );
+
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+      expect(controller.railCollapsed, isTrue, reason: 'the close runs after');
+      expect(controller.collapsed, isTrue);
+    });
+
+    testWidgets('leaving the search field closes nothing hover did not put off',
+        (tester) async {
+      // A pinned-open drawer under autoCollapse, used from the keyboard: no
+      // mouse pointer ever crosses it, so no close was ever put off, and the
+      // field losing focus must not invent one.
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: DrawerRailTheme.hoverAdaptive(),
+          ),
+        ),
+      );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+
+      expect(controller.hoverHidden, isFalse);
+    });
+
+    testWidgets('setHoverHold keeps a peek open until it is released',
+        (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: DrawerRailTheme.hoverAdaptive(),
+          ),
+        ),
+      );
+      final gesture = await hoverOver(tester, find.byType(DrawerRail));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+
+      // An app menu in the header opens; reaching for it leaves the drawer.
+      controller.setHoverHold(true);
+      await gesture.moveTo(const Offset(2000, 2000));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+      expect(controller.hoverPeeking, isTrue, reason: 'held open');
+
+      controller.setHoverHold(false);
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+      expect(
+        controller.hoverPeeking,
+        isFalse,
+        reason: 'the close that was put off runs once released',
+      );
+    });
+
+    testWidgets('the header keeps its state across a collapse', (tester) async {
+      var created = 0;
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            headerBuilder: (_, __) =>
+                _CountingHeader(onCreate: () => created++),
+          ),
+        ),
+      );
+      controller.setCollapsed(true);
+      await tester.pumpAndSettle();
+      controller.setCollapsed(false);
+      await tester.pumpAndSettle();
+
+      expect(
+        created,
+        1,
+        reason: 'swapping a Row for a Column tore the header down, closing '
+            'any menu open in it',
+      );
+    });
+
+    testWidgets('reduced motion opens and closes a group without throwing',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(disableAnimations: true),
+            child: Scaffold(
+              body: DrawerRail(
+                controller: controller,
+                entries: groupedEntries(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Reports'));
+      await tester.pump();
+      expect(
+        tester.takeException(),
+        isNull,
+        reason:
+            'AnimatedCrossFade at a zero duration trips "RenderAnimatedSize '
+            'was mutated in its own performLayout"',
+      );
+      expect(find.text('Sales').hitTestable(), findsOneWidget);
+
+      await tester.tap(find.text('Reports'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Sales'), findsNothing);
+    });
+
+    testWidgets('clicking a group hover already opened pins it open',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: groupedEntries(),
+            theme: const DrawerRailTheme(
+              groupTrigger: DrawerActivationMode.hover,
+            ),
+          ),
+        ),
+      );
+      final gesture = await hoverOver(tester, find.text('Reports'));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      expect(controller.isGroupExpanded('reports'), isTrue);
+
+      // A human click lands well after the 120ms hover open.
+      await gesture.down(tester.getCenter(find.text('Reports')));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(
+        controller.isGroupExpanded('reports'),
+        isTrue,
+        reason: 'the click used to toggle shut the group it was reaching for',
+      );
+
+      await gesture.moveTo(const Offset(2000, 2000));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+      expect(controller.isGroupExpanded('reports'), isTrue, reason: 'pinned');
+    });
+
+    testWidgets('clicking a rail flyout hover already opened keeps it open',
+        (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: groupedEntries(),
+            theme: const DrawerRailTheme(
+              groupTrigger: DrawerActivationMode.hover,
+            ),
+          ),
+        ),
+      );
+      final gesture = await hoverOver(tester, find.byIcon(Icons.bar_chart));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      expect(find.text('Sales'), findsOneWidget);
+
+      await gesture.down(tester.getCenter(find.byIcon(Icons.bar_chart)));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(find.text('Sales'), findsOneWidget);
+    });
+
+    testWidgets('a rail flyout opened by click survives the pointer leaving',
+        (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: groupedEntries(),
+            theme: const DrawerRailTheme(
+              groupTrigger: DrawerActivationMode.hover,
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byIcon(Icons.bar_chart));
+      await tester.pumpAndSettle();
+
+      final gesture = await hoverOver(tester, find.byIcon(Icons.bar_chart));
+      await tester.pump(const Duration(milliseconds: 300));
+      await gesture.moveTo(const Offset(2000, 2000));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Sales'),
+        findsOneWidget,
+        reason: 'only what hover opened closes on exit, as inline groups do',
+      );
+    });
+
+    testWidgets('the rail search button opens the panel without pinning it',
+        (tester) async {
+      String? opened;
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: [
+              DrawerLink(
+                id: 'settings',
+                icon: Icons.settings,
+                label: 'Settings',
+                onTap: (_) => opened = 'settings',
+              ),
+            ],
+          ),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.search_rounded));
+      await tester.pumpAndSettle();
+      expect(controller.railCollapsed, isFalse);
+      expect(
+        controller.collapsed,
+        isTrue,
+        reason: 'searching from the rail used to save "expanded" as the '
+            "user's preference",
+      );
+      expect(FocusManager.instance.primaryFocus, isNotNull);
+
+      await tester.enterText(find.byType(TextField), 'sett');
+      await tester.pump();
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      expect(opened, 'settings');
+      expect(controller.railCollapsed, isTrue, reason: 'back to the rail');
+
+      // A tap outside the drawer ends it too.
+      await tester.tap(find.byIcon(Icons.search_rounded));
+      await tester.pumpAndSettle();
+      expect(controller.railCollapsed, isFalse);
+      await tester.tapAt(const Offset(700, 300));
+      await tester.pumpAndSettle();
+      expect(controller.railCollapsed, isTrue);
+      expect(controller.collapsed, isTrue);
+    });
+
+    testWidgets('a tap in a held overlay does not end a rail-opened search',
+        (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(DrawerRail(controller: controller, entries: entries())),
+      );
+      await tester.tap(find.byIcon(Icons.search_rounded));
+      await tester.pumpAndSettle();
+      expect(controller.railCollapsed, isFalse);
+
+      // A header menu holds the drawer; its overlay lies outside the drawer,
+      // so a tap on one of its items lands as a tap outside.
+      controller.setHoverHold(true);
+      await tester.tapAt(const Offset(700, 300));
+      await tester.pumpAndSettle();
+      expect(
+        controller.railCollapsed,
+        isFalse,
+        reason: 'the panel collapsed from under the open menu',
+      );
+
+      controller.setHoverHold(false);
+      await tester.tapAt(const Offset(700, 300));
+      await tester.pumpAndSettle();
+      expect(controller.railCollapsed, isTrue);
+    });
+
+    testWidgets('mutedColor, dividerColor and focusColor reach the chrome',
+        (tester) async {
+      const muted = Color(0xFF123456);
+      const divider = Color(0xFF654321);
+      const focus = Color(0xFFABCDEF);
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: groupedEntries(),
+            footerBuilder: (_, __) => const SizedBox(height: 10),
+            theme: const DrawerRailTheme(
+              mutedColor: muted,
+              dividerColor: divider,
+              focusColor: focus,
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        tester
+            .widget<Icon>(find.byIcon(Icons.keyboard_arrow_down_rounded))
+            .color,
+        muted,
+      );
+      expect(
+        tester
+            .widget<IconButton>(
+              find.widgetWithIcon(IconButton, Icons.chevron_left_rounded),
+            )
+            .color,
+        muted,
+      );
+      expect(tester.widget<Divider>(find.byType(Divider)).color, divider);
+      final inkWell = tester.widget<InkWell>(
+        find.ancestor(of: find.text('Reports'), matching: find.byType(InkWell)),
+      );
+      expect(inkWell.focusColor, focus);
+    });
+
+    testWidgets('keyboard focus on a rail button shows its tooltip',
+        (tester) async {
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.alwaysTraditional;
+      addTearDown(
+        () => FocusManager.instance.highlightStrategy =
+            FocusHighlightStrategy.automatic,
+      );
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(DrawerRail(controller: controller, entries: entries())),
+      );
+      expect(find.text('Home'), findsNothing);
+
+      Focus.of(tester.element(find.byIcon(Icons.home))).requestFocus();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(
+        find.text('Home'),
+        findsOneWidget,
+        reason: 'the label is only a tooltip in the rail, and focus used to '
+            'leave a keyboard user guessing what each icon does',
+      );
+
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      expect(find.text('Home'), findsNothing);
+    });
+
+    testWidgets('labels stay out of an app-wide SelectionArea', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          SelectionArea(
+            child: DrawerRail(controller: controller, entries: entries()),
+          ),
+        ),
+      );
+
+      expect(
+        SelectionContainer.maybeOf(tester.element(find.text('Home'))),
+        isNull,
+        reason: 'a drag across the drawer used to leave a selection trail',
+      );
+    });
+
+    testWidgets('flyout items show selection, danger and badges',
+        (tester) async {
+      controller
+        ..setCollapsed(true)
+        ..select('sales');
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            theme: const DrawerRailTheme(labelColor: Color(0xFF00AA00)),
+            entries: [
+              DrawerGroup(
+                id: 'reports',
+                icon: Icons.bar_chart,
+                label: 'Reports',
+                children: [
+                  DrawerLink(
+                    id: 'sales',
+                    icon: Icons.attach_money,
+                    label: 'Sales',
+                    onTap: (_) {},
+                  ),
+                  DrawerLink(
+                    id: 'stock',
+                    icon: Icons.inventory,
+                    label: 'Stock',
+                    badge: const DrawerBadge.count(3),
+                    onTap: (_) {},
+                  ),
+                  DrawerLink(
+                    id: 'purge',
+                    icon: Icons.delete,
+                    label: 'Purge',
+                    danger: true,
+                    onTap: (_) {},
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.tap(find.byIcon(Icons.bar_chart));
+      await tester.pumpAndSettle();
+
+      final scheme = Theme.of(tester.element(find.text('Sales'))).colorScheme;
+      Color? colorOf(String label) =>
+          tester.widget<Text>(find.text(label)).style?.color;
+      expect(colorOf('Sales'), scheme.onPrimary, reason: 'selected pill');
+      expect(colorOf('Stock'), const Color(0xFF00AA00), reason: 'labelColor');
+      expect(colorOf('Purge'), scheme.error, reason: 'danger');
+      expect(find.text('3'), findsOneWidget, reason: 'badge');
+    });
+
+    testWidgets('selectOnTap: false runs onTap and leaves selection alone',
+        (tester) async {
+      var taps = 0;
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            selectOnTap: false,
+            entries: [
+              DrawerLink(
+                id: 'home',
+                icon: Icons.home,
+                label: 'Home',
+                onTap: (_) => taps++,
+              ),
+            ],
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Home'));
+      await tester.pumpAndSettle();
+
+      expect(taps, 1);
+      expect(controller.selectedId, isNull);
+    });
+
+    testWidgets('selectedIcon swaps in for the selected link and its group',
+        (tester) async {
+      controller.select('sales');
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: [
+              DrawerLink(
+                id: 'home',
+                icon: Icons.home_outlined,
+                selectedIcon: Icons.home,
+                label: 'Home',
+                onTap: (_) {},
+              ),
+              DrawerGroup(
+                id: 'reports',
+                icon: Icons.folder_outlined,
+                selectedIcon: Icons.folder,
+                label: 'Reports',
+                children: [
+                  DrawerLink(
+                    id: 'sales',
+                    icon: Icons.attach_money,
+                    label: 'Sales',
+                    onTap: (_) {},
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+      expect(find.byIcon(Icons.home_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.folder), findsOneWidget);
+
+      controller.select('home');
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.home), findsOneWidget);
+      expect(find.byIcon(Icons.folder_outlined), findsOneWidget);
+
+      controller.setCollapsed(true);
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.home), findsOneWidget, reason: 'rail too');
+    });
   });
+}
+
+/// A shell that rebuilds whenever the controller notifies, the way apps size
+/// the gutter beside the drawer.
+class _ListeningShell extends StatefulWidget {
+  const _ListeningShell({required this.controller, this.drawer});
+
+  final DrawerRailController controller;
+  final Widget? drawer;
+
+  @override
+  State<_ListeningShell> createState() => _ListeningShellState();
+}
+
+class _ListeningShellState extends State<_ListeningShell> {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_changed);
+  }
+
+  void _changed() => setState(() {});
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_changed);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        if (widget.drawer != null) widget.drawer!,
+        Text('rail: ${widget.controller.railCollapsed}'),
+      ],
+    );
+  }
+}
+
+/// A header that reports every time it is built from scratch.
+class _CountingHeader extends StatefulWidget {
+  const _CountingHeader({required this.onCreate});
+
+  final VoidCallback onCreate;
+
+  @override
+  State<_CountingHeader> createState() => _CountingHeaderState();
+}
+
+class _CountingHeaderState extends State<_CountingHeader> {
+  @override
+  void initState() {
+    super.initState();
+    widget.onCreate();
+  }
+
+  @override
+  Widget build(BuildContext context) => const Icon(Icons.person);
 }
