@@ -26,6 +26,7 @@ class AnimatedPressCard extends StatefulWidget {
     this.clickableCursor = SystemMouseCursors.click,
     this.inertCursor = SystemMouseCursors.basic,
     this.pressAnimationDuration = const Duration(milliseconds: 140),
+    this.focusColor,
   });
 
   /// The content of the card.
@@ -86,6 +87,10 @@ class AnimatedPressCard extends StatefulWidget {
   /// How long the press micro-scale takes. Defaults to 140ms; [Duration.zero]
   /// alongside a [pressedScale] of `1` is how the card goes completely still.
   final Duration pressAnimationDuration;
+
+  /// The overlay painted while the card has keyboard focus. Defaults to the
+  /// ambient [ThemeData.focusColor].
+  final Color? focusColor;
 
   @override
   State<AnimatedPressCard> createState() => _AnimatedPressCardState();
@@ -214,6 +219,7 @@ class _AnimatedPressCardState extends State<AnimatedPressCard>
                       ? (widget.hoverHighlightColor ??
                           scheme.primary.withValues(alpha: 0.08))
                       : Colors.transparent,
+              focusColor: widget.focusColor,
               splashColor: scheme.primary.withValues(alpha: 0.12),
               highlightColor: scheme.primary.withValues(alpha: 0.05),
               child: child,

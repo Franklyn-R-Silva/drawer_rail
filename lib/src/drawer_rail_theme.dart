@@ -83,6 +83,9 @@ class DrawerRailTheme {
     this.badgeCountColor,
     this.menuBackgroundColor,
     this.searchFillColor,
+    this.mutedColor,
+    this.dividerColor,
+    this.focusColor,
     this.hoverEffect = DrawerHoverEffect.shadow,
     this.hoverShadowColor,
     this.hoverHighlightColor,
@@ -212,6 +215,24 @@ class DrawerRailTheme {
   /// [ColorScheme.surfaceContainerHigh].
   final Color? searchFillColor;
 
+  /// The color of the drawer's secondary chrome: the collapse/expand and
+  /// search buttons, the search field's icon, hint and clear button, a group's
+  /// chevron and the "no results" message. Defaults to
+  /// [ColorScheme.onSurfaceVariant].
+  ///
+  /// Until now these could only be recolored by wrapping the drawer in a
+  /// [Theme] that overrode the whole [ColorScheme].
+  final Color? mutedColor;
+
+  /// The color of the divider above the footer and of the section dividers in
+  /// the collapsed rail. Defaults to the ambient [DividerThemeData].
+  final Color? dividerColor;
+
+  /// The overlay painted on an item that has keyboard focus. Defaults to the
+  /// ambient [ThemeData.focusColor], which can be too faint to see on a dark
+  /// drawer in a light app.
+  final Color? focusColor;
+
   /// Which visual feedback an item shows on hover. Defaults to
   /// [DrawerHoverEffect.shadow]. Use [DrawerHoverEffect.none] to disable the
   /// hover effect entirely (the press micro-scale still applies).
@@ -329,8 +350,12 @@ class DrawerRailTheme {
   final IconData groupTrailingIcon;
 
   /// A ready-made preset for pointer-driven apps: the rail expands when the
-  /// mouse enters it and collapses again when the pointer leaves, and groups
-  /// open on hover too.
+  /// mouse enters it and collapses again when the pointer leaves.
+  ///
+  /// Groups stay on click unless [groupTrigger] says otherwise. The preset used
+  /// to open them on hover too, and apps built on it switched that back off:
+  /// an inline group opening on the way to another item pushes that item down
+  /// and out from under the pointer.
   ///
   /// [linkTrigger] is deliberately *not* switched to hover — navigating because
   /// the pointer paused over a link is hostile, and impossible to undo with the
@@ -352,13 +377,14 @@ class DrawerRailTheme {
   factory DrawerRailTheme.hoverAdaptive({
     DrawerRailTheme base = const DrawerRailTheme(),
     bool autoCollapse = true,
+    DrawerActivationMode groupTrigger = DrawerActivationMode.click,
     Duration? openDelay,
     Duration? closeDelay,
     Duration? autoCollapseDelay,
   }) {
     return base.copyWith(
       railTrigger: DrawerActivationMode.hover,
-      groupTrigger: DrawerActivationMode.hover,
+      groupTrigger: groupTrigger,
       railAutoCollapse: autoCollapse,
       hoverOpenDelay: openDelay,
       hoverCloseDelay: closeDelay,
@@ -402,6 +428,9 @@ class DrawerRailTheme {
     Color? badgeCountColor,
     Color? menuBackgroundColor,
     Color? searchFillColor,
+    Color? mutedColor,
+    Color? dividerColor,
+    Color? focusColor,
     DrawerHoverEffect? hoverEffect,
     Color? hoverShadowColor,
     Color? hoverHighlightColor,
@@ -460,6 +489,9 @@ class DrawerRailTheme {
       badgeCountColor: badgeCountColor ?? this.badgeCountColor,
       menuBackgroundColor: menuBackgroundColor ?? this.menuBackgroundColor,
       searchFillColor: searchFillColor ?? this.searchFillColor,
+      mutedColor: mutedColor ?? this.mutedColor,
+      dividerColor: dividerColor ?? this.dividerColor,
+      focusColor: focusColor ?? this.focusColor,
       hoverEffect: hoverEffect ?? this.hoverEffect,
       hoverShadowColor: hoverShadowColor ?? this.hoverShadowColor,
       hoverHighlightColor: hoverHighlightColor ?? this.hoverHighlightColor,
@@ -546,7 +578,9 @@ class DrawerRailTheme {
       onBadgeTextColor: scheme.onPrimaryContainer,
       badgeCountColor: badgeCountColor ?? scheme.error,
       onBadgeCountColor: scheme.onError,
-      surfaceVariantColor: scheme.onSurfaceVariant,
+      mutedColor: mutedColor ?? scheme.onSurfaceVariant,
+      dividerColor: dividerColor,
+      focusColor: focusColor,
       errorColor: scheme.error,
       menuBackgroundColor: menuBackgroundColor ?? scheme.surfaceContainerHigh,
       searchFillColor: searchFillColor ?? scheme.surfaceContainerHigh,
@@ -631,7 +665,9 @@ class ResolvedDrawerRailTheme {
     required this.onBadgeTextColor,
     required this.badgeCountColor,
     required this.onBadgeCountColor,
-    required this.surfaceVariantColor,
+    required this.mutedColor,
+    this.dividerColor,
+    this.focusColor,
     required this.errorColor,
     required this.menuBackgroundColor,
     required this.searchFillColor,
@@ -750,8 +786,20 @@ class ResolvedDrawerRailTheme {
   /// The resolved count-badge foreground color.
   final Color onBadgeCountColor;
 
-  /// A muted foreground color used for secondary text and inactive icons.
-  final Color surfaceVariantColor;
+  /// See [DrawerRailTheme.mutedColor].
+  final Color mutedColor;
+
+  /// The old name of [mutedColor], from before it could be themed.
+  @Deprecated('Use mutedColor, which DrawerRailTheme.mutedColor now sets.')
+  Color get surfaceVariantColor => mutedColor;
+
+  /// See [DrawerRailTheme.dividerColor]. `null` defers to the ambient
+  /// [DividerThemeData].
+  final Color? dividerColor;
+
+  /// See [DrawerRailTheme.focusColor]. `null` defers to the ambient
+  /// [ThemeData.focusColor].
+  final Color? focusColor;
 
   /// The error color, used for [DrawerLink.danger] items.
   final Color errorColor;

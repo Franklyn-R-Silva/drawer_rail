@@ -2,6 +2,101 @@
 
 <!-- Add upcoming changes under a new "## Unreleased" heading. -->
 
+## 0.6.0
+
+Fixes for what the apps built on the drawer ran into in production — read off
+their workarounds, their tests and their changelogs — plus a fresh bug hunt.
+Every fix below is pinned by a regression test, and the crashes and hover bugs
+were each reproduced by a failing test before being fixed. The suite grew from
+52 tests to 75.
+
+### Breaking-ish
+
+- **`DrawerRailTheme.hoverAdaptive()` no longer opens groups on hover.** Every
+  app on the preset switched that back off with a `copyWith`: an inline group
+  opening on the way to another item pushes that item down and out from under
+  the pointer. Pass `groupTrigger: DrawerActivationMode.hover` to get the old
+  behavior back.
+- **The rail's search button no longer pins the drawer open.** It opens the
+  panel for the search only; picking a result or tapping outside puts back the
+  rail. Searching from a rail the user had pinned collapsed used to save
+  "expanded" as their preference.
+- `ResolvedDrawerRailTheme.surfaceVariantColor` is deprecated in favor of
+  `mutedColor`, and the resolved theme's constructor takes `mutedColor`
+  instead. Only matters if you build a `ResolvedDrawerRailTheme` by hand.
+
+### Crashes
+
+- **Fix: with reduced motion on, opening a group threw** "RenderAnimatedSize
+  was mutated in its own performLayout". `AnimatedCrossFade` cannot run at the
+  zero duration reduced motion resolves to; the children are now simply shown
+  or not. Measured on 0.4.0 and still present on 0.5.0.
+- **Fix: removing the drawer mid-peek broke any shell listening to the
+  controller** with "setState() called when widget tree was locked". 0.5.0's
+  teardown reset notified from `dispose`; it now runs once the frame is over.
+  Swapping the drawer's controller hands the old one back clean the same way.
+
+### Hover
+
+- **Fix: clicking a group hover had already opened shut it.** Hover opens a
+  group in 120ms, quicker than anyone clicks, so the click a user aimed at a
+  closed group nearly always toggled it closed again. It now pins it open —
+  inline and in the rail alike.
+- **Fix: a rail flyout opened by click closed as soon as the pointer left
+  it,** contradicting `groupTrigger`'s own docs. Only what hover opened closes
+  on exit now, as with inline groups.
+- **Fix: the panel closed mid-word** when the pointer drifted off while typing
+  in the search field, taking the field with it. A focused field now holds the
+  panel open; the close runs once it lets go of focus.
+- **Fix: a menu opened from the header closed when a hover peek ended.** The
+  header was a `Row` in the panel and a `Column` in the rail, so collapsing
+  tore it down; it now keeps its place in the tree, and apps no longer need a
+  `GlobalKey` to keep header state alive.
+- Add `DrawerRailController.setHoverHold` / `hoverHeld`: hold a hover-opened
+  drawer open while an overlay of your own is up (a header menu, a footer
+  popup). The close is put off, not dropped. `resetHoverState` clears it too.
+
+### Theming
+
+- **Fix: `iconColor` never reached link icons in the panel** — they took
+  `labelColor` — while group headers and the rail did use it.
+- **Fix: flyout items ignored the theme.** They now show the selected pill,
+  the danger tint, badges, `labelColor` and the label text styles, like their
+  counterparts in the panel.
+- Add `DrawerRailTheme.mutedColor` for the secondary chrome (collapse/expand
+  and search buttons, the search field's icon, hint and clear button, group
+  chevrons, "no results"), `dividerColor` and `focusColor`. Apps had to wrap
+  the drawer in a `Theme` overriding the whole `ColorScheme` to recolor these.
+- The search field's typed text follows `labelColor`, so it no longer comes out
+  dark on dark in a dark drawer inside a light app.
+- Add `focusColor` to `AnimatedPressCard`.
+
+### Layout and accessibility
+
+- **Fix: the safe-area inset was applied to the drawer's inner edge too,** so a
+  landscape notch on the far side knocked the rail icons off centre. Only the
+  outer edge honours it now.
+- **Fix: keyboard focus on a rail button showed nothing.** The label is only a
+  tooltip in the rail; it now appears when the button takes keyboard focus.
+- **Fix: under an app-wide `SelectionArea`, dragging across the drawer left a
+  selection trail** over the labels. The drawer now opts out of selection.
+
+### Selection
+
+- Add `DrawerRail.selectOnTap` (default `true`). Turn it off when the route
+  drives the selection: selecting on tap marked a pushed link in the menu of
+  the screen underneath, which then showed the wrong item on the way back.
+- Add `selectedIcon` to `DrawerLink` (shown while selected) and `DrawerGroup`
+  (shown while one of its children is), and `DrawerGroup.contains`. Apps were
+  rebuilding their entries on every selection just to swap icons.
+
+### Housekeeping
+
+- The rail search button's deferred focus request no longer touches a focus
+  node the drawer already disposed.
+- README: route-driven selection, holding the drawer open for your own
+  overlays, the new colors, and the hover preset as it now behaves.
+
 ## 0.5.0
 
 A bug-hunting release: everything below except the new API was found by reading

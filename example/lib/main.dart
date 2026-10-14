@@ -121,15 +121,18 @@ class _HomePageState extends State<HomePage> {
   /// Layers the pointer behavior on top of whichever look is selected.
   ///
   /// `hoverAdaptive` is the one-line way to make the drawer pointer-driven:
-  /// it switches the rail and groups to hover and leaves links on click, since
-  /// navigating because the pointer paused somewhere is hostile. `copyWith`
-  /// keeps everything else from the base theme untouched.
+  /// it switches the rail to hover and leaves links on click, since
+  /// navigating because the pointer paused somewhere is hostile. Groups stay
+  /// on click by default too; this demo opts them into hover so sweeping from
+  /// one group to the next is something you can try. Everything else from the
+  /// base theme is kept untouched.
   DrawerRailTheme get _theme {
     final base = _customRight ? _rightTheme : const DrawerRailTheme();
     if (!_hoverDriven) return base;
     return DrawerRailTheme.hoverAdaptive(
       base: base,
       autoCollapse: _autoCollapse,
+      groupTrigger: DrawerActivationMode.hover,
     );
   }
 
@@ -138,6 +141,7 @@ class _HomePageState extends State<HomePage> {
         DrawerLink(
           id: 'dashboard',
           icon: Icons.dashboard_outlined,
+          selectedIcon: Icons.dashboard_rounded,
           label: 'Dashboard',
           onTap: (_) => _go('Dashboard'),
         ),
@@ -199,6 +203,9 @@ class _HomePageState extends State<HomePage> {
         DrawerGroup(
           id: 'reports',
           icon: Icons.insert_chart_outlined_rounded,
+          // Shown while Sales or Traffic is selected, so the group tells you
+          // where you are even when it is closed.
+          selectedIcon: Icons.insert_chart_rounded,
           label: 'Reports',
           badge: const DrawerBadge.text('New'),
           children: [
@@ -219,6 +226,7 @@ class _HomePageState extends State<HomePage> {
         DrawerLink(
           id: 'settings',
           icon: Icons.settings_outlined,
+          selectedIcon: Icons.settings_rounded,
           label: 'Settings',
           onTap: (_) => _go('Settings'),
         ),

@@ -36,6 +36,7 @@ class DrawerRailController extends ChangeNotifier {
   bool _collapsed;
   bool _hoverPeeking = false;
   bool _hoverHidden = false;
+  bool _hoverHeld = false;
   bool _disposed = false;
   String? _selectedId;
   final Set<String> _expandedGroups;
@@ -65,6 +66,12 @@ class DrawerRailController extends ChangeNotifier {
   ///
   /// Transient by nature: do not persist it.
   bool get hoverHidden => _hoverHidden;
+
+  /// Whether the app is holding a hover-opened drawer open — see
+  /// [setHoverHold].
+  ///
+  /// Transient by nature: do not persist it.
+  bool get hoverHeld => _hoverHeld;
 
   /// Whether the drawer is rendering the narrow icon rail right now — that is,
   /// either hidden by hover, or [collapsed] and not currently peeked open.
@@ -113,6 +120,32 @@ class DrawerRailController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Holds the drawer open against hover (`true`), or lets it go (`false`).
+  ///
+  /// Hover closes the drawer when the pointer leaves it, and an overlay opened
+  /// from inside it — a menu in the header, a popup from the footer — is drawn
+  /// *outside* it, so reaching for one reads as leaving and the panel used to
+  /// collapse from under the open menu. Hold it for as long as such an overlay
+  /// is up:
+  ///
+  /// ```dart
+  /// MenuAnchor(
+  ///   onOpen: () => controller.setHoverHold(true),
+  ///   onClose: () => controller.setHoverHold(false),
+  ///   // ...
+  /// )
+  /// ```
+  ///
+  /// While held, a hover close is put off rather than dropped: once released,
+  /// the drawer closes if the pointer is still away, exactly as it would have.
+  /// Like the rest of the hover state it never changes [collapsed]. No-op if
+  /// already in [value].
+  void setHoverHold(bool value) {
+    if (_hoverHeld == value) return;
+    _hoverHeld = value;
+    notifyListeners();
+  }
+
   /// Toggles between the expanded panel and the collapsed rail.
   ///
   /// Toggles the *pinned* state, so a drawer currently hidden or peeked by
@@ -145,18 +178,20 @@ class DrawerRailController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Clears the transient hover state — [hoverPeeking] and [hoverHidden] —
-  /// leaving the pinned [collapsed] preference untouched.
+  /// Clears the transient hover state — [hoverPeeking], [hoverHidden] and
+  /// [hoverHeld] — leaving the pinned [collapsed] preference untouched.
   ///
-  /// [DrawerRail] calls this as it leaves the tree, so a controller that
+  /// [DrawerRail] calls this once it has left the tree, so a controller that
   /// outlives the drawer (one hoisted above the navigator, say) does not go on
-  /// reporting a peek that no widget is holding open any more. Safe to call on
-  /// an already-disposed controller, since teardown order is the caller's to
-  /// choose: it simply does nothing.
+  /// reporting a peek that no widget is holding open any more — nor a hold
+  /// whose overlay went with the drawer. Safe to call on an already-disposed
+  /// controller, since teardown order is the caller's to choose: it simply
+  /// does nothing.
   void resetHoverState() {
-    if (_disposed || (!_hoverPeeking && !_hoverHidden)) return;
+    if (_disposed || (!_hoverPeeking && !_hoverHidden && !_hoverHeld)) return;
     _hoverPeeking = false;
     _hoverHidden = false;
+    _hoverHeld = false;
     notifyListeners();
   }
 

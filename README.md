@@ -44,6 +44,8 @@ State lives in a plain `ChangeNotifier` (`DrawerRailController`), so there is
 - 🎞️ Every duration **and curve** exposed; honours the OS "reduce motion"
   setting automatically.
 - 🌍 Localizable chrome via `DrawerRailLabels`.
+- ⌨️ Keyboard-friendly: a rail button shows its label when it takes focus, and
+  the drawer stays out of an app-wide `SelectionArea`.
 - 🧱 Custom header and footer slots (avatar, dark-mode toggle, sign out, …).
 - 🧪 No runtime dependencies beyond Flutter.
 
@@ -53,7 +55,7 @@ Add it to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  drawer_rail: ^0.5.0
+  drawer_rail: ^0.6.0
 ```
 
 Or let pub add it for you:
@@ -154,6 +156,11 @@ class _HomePageState extends State<HomePage> {
 from it directly. Set `danger: true` for destructive items (e.g. sign out) to
 tint them with the error color.
 
+Give a link a `selectedIcon` — typically the filled variant of an outlined
+icon — and it swaps in while the link is selected. A `DrawerGroup`'s
+`selectedIcon` shows while one of its children is selected, so a closed group
+still tells you where you are. No need to rebuild the entries to swap icons.
+
 ### Badges
 
 ```dart
@@ -164,7 +171,10 @@ DrawerBadge.count(4);     // numeric; hidden at 0, shown as "99+" above 99
 ## Search
 
 Set `showSearch: true` (the default) and the panel gets a filter field; the
-collapsed rail gets a magnifier that expands the drawer and focuses it.
+collapsed rail gets a magnifier that opens the panel **for the search only**
+and focuses the field. It does not pin anything: picking a result, or tapping
+anywhere outside the drawer, puts back the rail the user chose, and
+`controller.collapsed` — the value you persist — never changes.
 
 - **Diacritics are ignored both ways**, so `acao` finds `Ação` and vice versa.
 - **Group names match too.** Typing `repo` surfaces every link inside
@@ -175,6 +185,9 @@ collapsed rail gets a magnifier that expands the drawer and focuses it.
   in the rail, so a query left running there would silently filter the panel the
   next time it opened. A hover peek or auto-hide is transient and deliberately
   leaves what you typed alone.
+- **Hover never closes the panel while the field has focus.** Moving the
+  pointer off the drawer mid-word no longer pulls the field out from under the
+  keystrokes; the close waits until the field lets go of focus.
 
 `showSearch: false` removes the field and the rail button alike.
 
@@ -195,6 +208,7 @@ controller.select('payments');  // highlight an entry
 controller.clearSelection();
 controller.toggleGroup('services');
 controller.setGroupExpanded('services', true); // idempotent
+controller.setHoverHold(true);  // keep a hover-opened drawer open for now
 controller.resetHoverState();   // drop a peek/auto-hide, keep `collapsed`
 ```
 
@@ -211,6 +225,28 @@ Reading state — the distinction matters once hover is involved:
 | `railCollapsed` | What is **on screen right now**. Use it for layout that must line up with the drawer's real width. |
 | `hoverPeeking` | A collapsed rail is currently held open by the pointer. Transient. |
 | `hoverHidden` | An expanded panel is currently held shut by the pointer having left. Transient. |
+| `hoverHeld` | The app is holding the drawer open against hover — see [Keeping it open for your own overlays](#keeping-it-open-for-your-own-overlays). Transient. |
+
+### Selection that follows the route
+
+By default, tapping a link selects it and then runs its `onTap`. If your app
+derives the selection from the current route instead, turn that off and call
+`select` as the location changes:
+
+```dart
+DrawerRail(
+  controller: _controller,
+  entries: _entries,
+  selectOnTap: false, // the router decides what is selected
+);
+
+// wherever you observe the route:
+_controller.select(idForLocation(location));
+```
+
+Selecting on tap fights a route-driven selection: a link that *pushes* a route
+marks itself in the menu of the screen underneath, which stays mounted below
+the new one and still shows the wrong item once the user comes back.
 
 ### Persisting state
 
@@ -339,7 +375,10 @@ change it. Defaults in parentheses.
 | `backgroundColor` (`surface`) | The drawer surface. Also used as the opaque backing behind a lifted item, so hover shadows read as elevation instead of haze. |
 | `selectedColor` (`primary`) | Fill of the selected pill, and the badge dot in the rail. |
 | `onSelectedColor` (`onPrimary`) | Icon and label color *on top of* the selected pill. |
-| `iconColor` / `labelColor` (`onSurface`) | Unselected icon / label color. Overridden by the error color on `danger: true` links. |
+| `iconColor` / `labelColor` (`onSurface`) | Unselected icon / label color — in the panel, the rail *and* the flyouts. Overridden by the error color on `danger: true` links. |
+| `mutedColor` (`onSurfaceVariant`) | Secondary chrome: the collapse/expand and search buttons, the search field's icon, hint and clear button, group chevrons, the "no results" message. |
+| `dividerColor` (ambient) | The divider above the footer and the section dividers in the rail. |
+| `focusColor` (ambient) | The overlay on an item with keyboard focus — worth setting on a dark drawer in a light app, where the default is too faint to see. |
 | `sectionColor` (`primary`) | Section header color. Ignored if `sectionTextStyle` already sets a color. |
 | `badgeTextColor` / `badgeCountColor` | Background of a `DrawerBadge.text` pill / a `DrawerBadge.count` pill. Foregrounds are derived automatically. |
 | `menuBackgroundColor` | Background of the flyout menu a group opens in the collapsed rail. |
@@ -424,16 +463,24 @@ DrawerRail(
 );
 ```
 
-That single line switches the rail and groups to hover and turns on
-`railAutoCollapse`, so:
+That single line switches the rail to hover and turns on `railAutoCollapse`,
+so:
 
 | You do this | The drawer does this |
 | ----------- | -------------------- |
 | Move the pointer onto the rail | Expands to the full panel after `hoverOpenDelay` |
 | Move the pointer away | Collapses back after `hoverCloseDelay` (or `hoverAutoCollapseDelay` if it was pinned open) |
-| Rest on a group | Opens it inline, or as a flyout in the rail |
 | Click the collapse button | **Pins** that state — hover stops fighting you until you move away and back |
 | Tap anything on a touch device | Works exactly as before; hover events never fire there |
+
+Groups stay on click. The preset used to open them on hover too, and every app
+built on it switched that back off: an inline group opening on the way to
+another item pushes that item down and out from under the pointer. Ask for it
+explicitly if you want it:
+
+```dart
+DrawerRailTheme.hoverAdaptive(groupTrigger: DrawerActivationMode.hover)
+```
 
 Layer it on top of your own styling with `base`, and turn the closing half off
 if you only want hover to *open*:
@@ -467,12 +514,36 @@ const DrawerRailTheme(
   and keep persisting `collapsed`.
 - **An explicit click always wins.** Hitting collapse/expand cancels any hover
   timer in flight, so a pending peek cannot undo your click a frame later.
-- **A group you opened by clicking stays open** when the pointer leaves. Only
-  groups that hover itself opened are closed again — including when the whole
-  panel closes, so nothing is left hanging open for next time.
+- **A group you opened by clicking stays open** when the pointer leaves — inline
+  or as a rail flyout. Only what hover itself opened is closed again —
+  including when the whole panel closes, so nothing is left hanging open for
+  next time.
+- **Clicking a group hover already opened pins it.** Hover opens a group in
+  120ms, quicker than anyone clicks, so a click that toggled would shut nearly
+  every group the user was reaching to open.
 - **Sweeping down a list of groups leaves nothing behind.** Each group keeps its
   own timer, so moving straight from one to the next closes the first and opens
   the second; in the rail, only one flyout is ever open at a time.
+
+### Keeping it open for your own overlays
+
+A menu, popup or dialog opened from your header or footer is drawn *outside*
+the drawer, so moving the pointer onto it reads as leaving — and hover would
+collapse the panel from under it. Hold the drawer for as long as the overlay is
+up:
+
+```dart
+MenuAnchor(
+  onOpen: () => controller.setHoverHold(true),
+  onClose: () => controller.setHoverHold(false),
+  // ...
+)
+```
+
+The close is put off, not dropped: once released, the drawer closes if the
+pointer is still away, exactly as it would have. The header also keeps its
+place in the widget tree across a collapse, so a menu open in it is no longer
+torn down — no `GlobalKey` needed.
 
 ### The one to be careful with
 
@@ -510,6 +581,7 @@ Beyond the theme, `DrawerRail` itself exposes toggles and slots:
 | `showFooterDivider` | Draw a divider above the footer. |
 | `headerBuilder` / `footerBuilder` | Fully custom header/footer per state. |
 | `searchDecoration` | Replace the search field's `InputDecoration`. |
+| `selectOnTap` | Whether tapping a link selects it (default `true`). Turn off when the route drives the selection. |
 | `labels` | Localize every built-in string (see below). |
 
 Full control of the search field:

@@ -86,6 +86,7 @@ class DrawerLink extends DrawerEntry {
     required this.onTap,
     this.badge,
     this.danger = false,
+    this.selectedIcon,
   });
 
   /// A stable, unique identifier used for selection highlighting.
@@ -93,6 +94,10 @@ class DrawerLink extends DrawerEntry {
 
   /// The leading icon.
   final IconData icon;
+
+  /// The icon shown instead of [icon] while this link is selected — typically
+  /// the filled variant of an outlined [icon]. Falls back to [icon].
+  final IconData? selectedIcon;
 
   /// The visible label.
   final String label;
@@ -121,6 +126,7 @@ class DrawerGroup extends DrawerEntry {
     required this.label,
     required this.children,
     this.badge,
+    this.selectedIcon,
   });
 
   /// A stable, unique identifier for this group.
@@ -128,6 +134,13 @@ class DrawerGroup extends DrawerEntry {
 
   /// The leading icon.
   final IconData icon;
+
+  /// The icon shown instead of [icon] while one of [children] is selected.
+  /// Falls back to [icon].
+  final IconData? selectedIcon;
+
+  /// Whether the link with [id] is one of this group's [children].
+  bool contains(String? id) => id != null && children.any((c) => c.id == id);
 
   /// The visible label.
   final String label;
