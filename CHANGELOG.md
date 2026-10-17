@@ -2,6 +2,16 @@
 
 <!-- Add upcoming changes under a new "## Unreleased" heading. -->
 
+## 0.6.1
+
+- **Fix: a rail flyout still overlapped the rail.** 0.5.0 moved it beside the
+  button, but measured from the button's slot, which ends inside the rail by
+  the theme's `contentPadding`. With the default padding the flyout covered
+  the rail's last 4px; on a rail and flyout of the same color it read as glued
+  to the rail instead of opening beside it. It now clears the rail's edge by
+  the gap, on either side, and follows a custom `contentPadding`. The test
+  that let the overlap through (it accepted 8px of it) now asks for none.
+
 ## 0.6.0
 
 Fixes for what the apps built on the drawer ran into in production — read off

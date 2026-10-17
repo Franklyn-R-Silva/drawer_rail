@@ -1053,6 +1053,14 @@ class _DrawerRailState extends State<DrawerRail> {
     // Captured outside the flyout, so the RTL wrapper below cannot leak into
     // the items themselves.
     final appDirection = Directionality.of(context);
+    // The anchor ends where the button's slot ends, which is still inside the
+    // rail: the content padding sits between it and the rail's edge facing
+    // the content, which is the edge the flyout has to clear.
+    // Measured from the anchor alone, the flyout overlapped the rail by that
+    // padding minus the gap — on a rail and flyout of the same color, it read
+    // as glued to the rail rather than opening beside it.
+    final padding = theme.contentPadding.resolve(appDirection);
+    final innerInset = onRight ? padding.left : padding.right;
     final anchored = MenuAnchor(
       controller: menu,
       // The flyout also closes on its own — a tap outside, Escape, an item
@@ -1062,7 +1070,7 @@ class _DrawerRailState extends State<DrawerRail> {
       // the flyout straight over the next rail buttons, so the group underneath
       // an open group could not be reached at all — fatal with hover, where the
       // pointer has to travel *through* the overlay to get anywhere.
-      alignmentOffset: const Offset(_flyoutGap, 0),
+      alignmentOffset: Offset(innerInset + _flyoutGap, 0),
       style: MenuStyle(
         alignment: AlignmentDirectional.topEnd,
         backgroundColor: WidgetStatePropertyAll(theme.menuBackgroundColor),
@@ -1204,9 +1212,7 @@ class _DrawerRailState extends State<DrawerRail> {
 /// The breathing room left between the rail and a flyout opened beside it.
 const double _flyoutGap = 4;
 
-/// The horizontal inset of a rail button inside the rail. Shared with the
-/// flyout placement, which measures from the rail's edge rather than the
-/// button's.
+/// The horizontal inset of a rail button inside its slot in the rail.
 const double _railButtonInset = 10;
 
 /// A single icon button in the collapsed rail: tooltip, selected pill and an
