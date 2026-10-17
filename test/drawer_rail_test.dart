@@ -1013,10 +1013,44 @@ void main() {
 
       expect(
         flyout.left,
-        greaterThanOrEqualTo(railRight - 8),
+        greaterThanOrEqualTo(railRight),
         reason: 'the flyout used to drop straight over the next rail button, '
-            'putting the group underneath out of reach',
+            'putting the group underneath out of reach — and once beside it, '
+            'still overlapped the rail by its content padding',
       );
+    });
+
+    testWidgets('a right-hand rail opens its flyout clear of it, to the left',
+        (tester) async {
+      controller.setCollapsed(true);
+      await tester.pumpWidget(
+        _wrap(
+          Align(
+            alignment: Alignment.centerRight,
+            child: DrawerRail(
+              controller: controller,
+              entries: twoGroups(),
+              theme: const DrawerRailTheme(position: DrawerRailPosition.right),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.bar_chart));
+      await tester.pumpAndSettle();
+
+      final flyout = tester.getRect(
+        find
+            .ancestor(
+              of: find.text('Sales'),
+              matching: find.byType(MenuItemButton),
+            )
+            .first,
+      );
+      final railLeft = tester.getRect(find.byType(DrawerRail)).left;
+
+      expect(flyout.right, lessThanOrEqualTo(railLeft));
     });
 
     testWidgets('a group with no children opens no empty flyout',
