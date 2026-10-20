@@ -55,7 +55,7 @@ Add it to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  drawer_rail: ^0.6.0
+  drawer_rail: ^0.7.0
 ```
 
 Or let pub add it for you:
@@ -200,6 +200,7 @@ final controller = DrawerRailController(
   collapsed: false,
   selectedId: 'dashboard',
   initiallyExpanded: {'services'},
+  accordion: true, // opening a group closes the open one (default: false)
 );
 
 controller.toggleCollapsed();   // panel <-> rail
