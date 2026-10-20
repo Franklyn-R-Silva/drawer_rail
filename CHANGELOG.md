@@ -2,6 +2,15 @@
 
 <!-- Add upcoming changes under a new "## Unreleased" heading. -->
 
+## 0.7.0
+
+- **New: accordion groups.** `DrawerRailController(accordion: true)` keeps at
+  most one group open: expanding a group — by click, by hover or through
+  `toggleGroup`/`setGroupExpanded` — collapses the one that was open, in a
+  single notification. Off by default, so existing drawers behave as before.
+  Apps that wanted this used to subclass the controller and override both
+  methods.
+
 ## 0.6.1
 
 - **Fix: a rail flyout still overlapped the rail.** 0.5.0 moved it beside the

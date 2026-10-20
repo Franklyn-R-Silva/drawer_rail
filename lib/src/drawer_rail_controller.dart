@@ -24,14 +24,24 @@ class DrawerRailController extends ChangeNotifier {
   ///
   /// [collapsed] is the initial collapsed state, and [selectedId] optionally
   /// pre-selects an entry by its [DrawerLink.id]. Groups listed in
-  /// [initiallyExpanded] start open.
+  /// [initiallyExpanded] start open. With [accordion] on, opening a group
+  /// closes the one that was open.
   DrawerRailController({
     bool collapsed = false,
     String? selectedId,
     Set<String>? initiallyExpanded,
-  })  : _collapsed = collapsed,
+    this.accordion = false,
+  })  : assert(
+          !accordion || (initiallyExpanded?.length ?? 0) <= 1,
+          'an accordion starts with at most one group open',
+        ),
+        _collapsed = collapsed,
         _selectedId = selectedId,
         _expandedGroups = {...?initiallyExpanded};
+
+  /// Whether at most one group is open at a time: expanding a group — by
+  /// click, by hover or from code — collapses every other one.
+  final bool accordion;
 
   bool _collapsed;
   bool _hoverPeeking = false;
@@ -173,9 +183,15 @@ class DrawerRailController extends ChangeNotifier {
   /// Expands or collapses the group with [id].
   void toggleGroup(String id) {
     if (!_expandedGroups.remove(id)) {
-      _expandedGroups.add(id);
+      _expandGroup(id);
     }
     notifyListeners();
+  }
+
+  /// Opens [id] — after closing every other group, in an [accordion].
+  void _expandGroup(String id) {
+    if (accordion) _expandedGroups.clear();
+    _expandedGroups.add(id);
   }
 
   /// Clears the transient hover state — [hoverPeeking], [hoverHidden] and
@@ -207,9 +223,12 @@ class DrawerRailController extends ChangeNotifier {
   /// Unlike [toggleGroup] this is idempotent, which is what hover needs: moving
   /// the pointer onto an already-open group must not close it.
   void setGroupExpanded(String id, bool expanded) {
-    final changed =
-        expanded ? _expandedGroups.add(id) : _expandedGroups.remove(id);
-    if (!changed) return;
+    if (expanded == _expandedGroups.contains(id)) return;
+    if (expanded) {
+      _expandGroup(id);
+    } else {
+      _expandedGroups.remove(id);
+    }
     notifyListeners();
   }
 }

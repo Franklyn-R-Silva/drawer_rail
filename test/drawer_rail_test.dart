@@ -160,6 +160,38 @@ void main() {
       expect(controller.isGroupExpanded('g'), isFalse);
       expect(notifications, 2);
     });
+
+    test('an accordion keeps one group open, notifying once per open', () {
+      final controller = DrawerRailController(
+        accordion: true,
+        initiallyExpanded: {'a'},
+      );
+      addTearDown(controller.dispose);
+
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+
+      controller.toggleGroup('b');
+      expect(controller.expandedGroups, {'b'});
+
+      controller.setGroupExpanded('c', true);
+      expect(controller.expandedGroups, {'c'});
+      expect(notifications, 2);
+
+      controller.toggleGroup('c');
+      expect(controller.expandedGroups, isEmpty,
+          reason: 'closing still closes');
+    });
+
+    test('without accordion, groups open side by side', () {
+      final controller = DrawerRailController();
+      addTearDown(controller.dispose);
+
+      controller.toggleGroup('a');
+      controller.setGroupExpanded('b', true);
+
+      expect(controller.expandedGroups, {'a', 'b'});
+    });
   });
 
   group('DrawerRailController.setHoverHold', () {
@@ -955,6 +987,22 @@ void main() {
         reason: 'one shared timer used to drop the pending close of the group '
             'the pointer had just left, stranding it open',
       );
+    });
+
+    testWidgets('an accordion closes the open group when another is clicked',
+        (tester) async {
+      final accordion = DrawerRailController(accordion: true);
+      addTearDown(accordion.dispose);
+      await tester.pumpWidget(
+        _wrap(DrawerRail(controller: accordion, entries: twoGroups())),
+      );
+
+      await tester.tap(find.text('Reports'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Admin'));
+      await tester.pumpAndSettle();
+
+      expect(accordion.expandedGroups, {'admin'});
     });
 
     testWidgets('moving down the rail swaps the flyout instead of stacking one',
