@@ -179,8 +179,11 @@ void main() {
       expect(notifications, 2);
 
       controller.toggleGroup('c');
-      expect(controller.expandedGroups, isEmpty,
-          reason: 'closing still closes');
+      expect(
+        controller.expandedGroups,
+        isEmpty,
+        reason: 'closing still closes',
+      );
     });
 
     test('without accordion, groups open side by side', () {
