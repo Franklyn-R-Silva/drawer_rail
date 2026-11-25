@@ -1843,6 +1843,80 @@ void main() {
       expect(controller.railCollapsed, isTrue);
     });
 
+    testWidgets('footerMaxHeight caps the footer, which then scrolls',
+        (tester) async {
+      Widget drawer({double? maxHeight}) => _wrap(
+            DrawerRail(
+              controller: controller,
+              entries: entries(),
+              theme: DrawerRailTheme(footerMaxHeight: maxHeight),
+              footerBuilder: (_, __) => const SizedBox(
+                key: Key('footer'),
+                height: 200,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Text('Sign out'),
+                ),
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(drawer());
+      expect(
+        tester.getSize(find.byKey(const Key('footer'))).height,
+        200,
+        reason: 'without a cap the footer keeps its natural height',
+      );
+
+      await tester.pumpWidget(drawer(maxHeight: 80));
+      final scroll = find.ancestor(
+        of: find.byKey(const Key('footer')),
+        matching: find.byType(SingleChildScrollView),
+      );
+      expect(tester.getSize(scroll).height, 80);
+
+      // What the cap hides is still reachable by scrolling.
+      await tester.drag(scroll, const Offset(0, -200));
+      await tester.pumpAndSettle();
+      final viewport = tester.getRect(scroll);
+      final signOut = tester.getCenter(find.text('Sign out'));
+      expect(viewport.contains(signOut), isTrue);
+    });
+
+    testWidgets(
+        'headerPadding, railHeaderPadding and searchPadding reach the '
+        'chrome', (tester) async {
+      const header = EdgeInsets.fromLTRB(1, 2, 3, 4);
+      const railHeader = EdgeInsets.symmetric(vertical: 5);
+      const search = EdgeInsets.fromLTRB(6, 7, 8, 9);
+      await tester.pumpWidget(
+        _wrap(
+          DrawerRail(
+            controller: controller,
+            entries: entries(),
+            theme: const DrawerRailTheme(
+              headerPadding: header,
+              railHeaderPadding: railHeader,
+              searchPadding: search,
+            ),
+          ),
+        ),
+      );
+
+      EdgeInsetsGeometry paddingAround(Finder child) => tester
+          .widget<Padding>(
+            find.ancestor(of: child, matching: find.byType(Padding)).first,
+          )
+          .padding;
+
+      expect(paddingAround(find.byType(TextField)), search);
+      expect(paddingAround(find.byType(Flex).first), header);
+
+      controller.setCollapsed(true);
+      await tester.pumpAndSettle();
+      expect(paddingAround(find.byType(Flex).first), railHeader);
+    });
+
     testWidgets('mutedColor, dividerColor and focusColor reach the chrome',
         (tester) async {
       const muted = Color(0xFF123456);

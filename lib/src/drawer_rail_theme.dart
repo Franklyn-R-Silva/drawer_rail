@@ -73,6 +73,10 @@ class DrawerRailTheme {
         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     this.itemPadding = const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     this.groupChildIndent = 24,
+    this.headerPadding = const EdgeInsets.fromLTRB(16, 12, 8, 8),
+    this.railHeaderPadding = const EdgeInsets.symmetric(vertical: 12),
+    this.searchPadding = const EdgeInsets.fromLTRB(16, 0, 16, 8),
+    this.footerMaxHeight,
     this.backgroundColor,
     this.selectedColor,
     this.onSelectedColor,
@@ -177,6 +181,28 @@ class DrawerRailTheme {
 
   /// The left indentation of a group's child links in the expanded panel.
   final double groupChildIndent;
+
+  /// Padding around the header (the `headerBuilder` content and the collapse
+  /// button) in the expanded panel. Defaults to `EdgeInsets.fromLTRB(16, 12,
+  /// 8, 8)`; shrink it on short screens, where every pixel of header is one
+  /// less for the menu.
+  final EdgeInsetsGeometry headerPadding;
+
+  /// Padding around the header in the collapsed rail. Defaults to 12 above and
+  /// below. Keep the horizontal part small: the rail is barely wider than its
+  /// buttons.
+  final EdgeInsetsGeometry railHeaderPadding;
+
+  /// Padding around the search field in the expanded panel. Defaults to
+  /// `EdgeInsets.fromLTRB(16, 0, 16, 8)`. The field's own height comes from
+  /// `DrawerRail.searchDecoration` (`isDense`, `contentPadding`).
+  final EdgeInsetsGeometry searchPadding;
+
+  /// The tallest the footer may grow, in logical pixels. When the
+  /// `footerBuilder` content is taller, the footer scrolls inside that height
+  /// instead of taking room from the menu. `null` (the default) lets the
+  /// footer take its natural height.
+  final double? footerMaxHeight;
 
   /// The drawer surface color. Defaults to [ColorScheme.surface].
   final Color? backgroundColor;
@@ -418,6 +444,10 @@ class DrawerRailTheme {
     EdgeInsetsGeometry? contentPadding,
     EdgeInsetsGeometry? itemPadding,
     double? groupChildIndent,
+    EdgeInsetsGeometry? headerPadding,
+    EdgeInsetsGeometry? railHeaderPadding,
+    EdgeInsetsGeometry? searchPadding,
+    double? footerMaxHeight,
     Color? backgroundColor,
     Color? selectedColor,
     Color? onSelectedColor,
@@ -479,6 +509,10 @@ class DrawerRailTheme {
       contentPadding: contentPadding ?? this.contentPadding,
       itemPadding: itemPadding ?? this.itemPadding,
       groupChildIndent: groupChildIndent ?? this.groupChildIndent,
+      headerPadding: headerPadding ?? this.headerPadding,
+      railHeaderPadding: railHeaderPadding ?? this.railHeaderPadding,
+      searchPadding: searchPadding ?? this.searchPadding,
+      footerMaxHeight: footerMaxHeight ?? this.footerMaxHeight,
       backgroundColor: backgroundColor ?? this.backgroundColor,
       selectedColor: selectedColor ?? this.selectedColor,
       onSelectedColor: onSelectedColor ?? this.onSelectedColor,
@@ -568,6 +602,10 @@ class DrawerRailTheme {
       contentPadding: contentPadding,
       itemPadding: itemPadding,
       groupChildIndent: groupChildIndent,
+      headerPadding: headerPadding,
+      railHeaderPadding: railHeaderPadding,
+      searchPadding: searchPadding,
+      footerMaxHeight: footerMaxHeight,
       backgroundColor: backgroundColor ?? scheme.surface,
       selectedColor: resolvedSelected,
       onSelectedColor: resolvedOnSelected,
@@ -655,6 +693,10 @@ class ResolvedDrawerRailTheme {
     required this.contentPadding,
     required this.itemPadding,
     required this.groupChildIndent,
+    required this.headerPadding,
+    required this.railHeaderPadding,
+    required this.searchPadding,
+    this.footerMaxHeight,
     required this.backgroundColor,
     required this.selectedColor,
     required this.onSelectedColor,
@@ -755,6 +797,18 @@ class ResolvedDrawerRailTheme {
 
   /// See [DrawerRailTheme.groupChildIndent].
   final double groupChildIndent;
+
+  /// See [DrawerRailTheme.headerPadding].
+  final EdgeInsetsGeometry headerPadding;
+
+  /// See [DrawerRailTheme.railHeaderPadding].
+  final EdgeInsetsGeometry railHeaderPadding;
+
+  /// See [DrawerRailTheme.searchPadding].
+  final EdgeInsetsGeometry searchPadding;
+
+  /// See [DrawerRailTheme.footerMaxHeight].
+  final double? footerMaxHeight;
 
   /// The resolved drawer surface color.
   final Color backgroundColor;

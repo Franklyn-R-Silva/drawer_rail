@@ -2,6 +2,17 @@
 
 <!-- Add upcoming changes under a new "## Unreleased" heading. -->
 
+## 0.8.0
+
+- **New: size the chrome around the header, search and footer.** On short
+  screens the drawer's fixed spacing above and below the header and search
+  field took room the menu needed. `DrawerRailTheme.headerPadding`,
+  `railHeaderPadding` and `searchPadding` now set it; the defaults are the
+  values that were hard-coded before, so existing drawers look the same.
+- **New: `DrawerRailTheme.footerMaxHeight`.** Caps the footer; content taller
+  than that scrolls inside it instead of squeezing the menu. Unset by default,
+  which keeps the footer at its natural height.
+
 ## 0.7.0
 
 - **New: accordion groups.** `DrawerRailController(accordion: true)` keeps at
