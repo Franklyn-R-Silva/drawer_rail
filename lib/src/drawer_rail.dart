@@ -1,5 +1,8 @@
 import 'dart:async';
 
+// Flutter 3.50 moved this to package:material_ui; kept while the package
+// supports older Flutter versions.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -631,7 +634,7 @@ class _DrawerRailState extends State<DrawerRail> {
                             if (widget.footerBuilder != null) ...[
                               if (widget.showFooterDivider)
                                 Divider(height: 1, color: theme.dividerColor),
-                              widget.footerBuilder!(context, collapsed),
+                              _buildFooter(collapsed, theme),
                             ],
                           ],
                         ),
@@ -656,9 +659,7 @@ class _DrawerRailState extends State<DrawerRail> {
     }
 
     return Padding(
-      padding: collapsed
-          ? const EdgeInsets.symmetric(vertical: 12)
-          : const EdgeInsets.fromLTRB(16, 12, 8, 8),
+      padding: collapsed ? theme.railHeaderPadding : theme.headerPadding,
       // One Flex that turns on its side, rather than a Column swapped for a
       // Row: the header keeps its place in the tree across a collapse, so
       // whatever state it holds survives the drawer changing shape. Apps had to
@@ -686,6 +687,18 @@ class _DrawerRailState extends State<DrawerRail> {
             ),
         ],
       ),
+    );
+  }
+
+  // ---- Footer --------------------------------------------------------------
+
+  Widget _buildFooter(bool collapsed, ResolvedDrawerRailTheme theme) {
+    final footer = widget.footerBuilder!(context, collapsed);
+    final maxHeight = theme.footerMaxHeight;
+    if (maxHeight == null) return footer;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: SingleChildScrollView(child: footer),
     );
   }
 
@@ -719,7 +732,7 @@ class _DrawerRailState extends State<DrawerRail> {
           ),
         );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: theme.searchPadding,
       child: TextField(
         controller: _searchController,
         focusNode: _searchFocus,

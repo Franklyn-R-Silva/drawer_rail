@@ -55,7 +55,7 @@ Add it to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  drawer_rail: ^0.7.0
+  drawer_rail: ^0.8.0
 ```
 
 Or let pub add it for you:
@@ -367,6 +367,9 @@ change it. Defaults in parentheses.
 | `contentPadding` | Padding around the scrolling list as a whole. |
 | `itemPadding` | Padding *inside* each item — the main lever for row height in the panel. |
 | `groupChildIndent` (`24`) | How far a group's children are pushed right, so the hierarchy reads. |
+| `headerPadding` (`16, 12, 8, 8`) / `railHeaderPadding` (`12` above and below) | Padding around the header in the panel / in the rail. |
+| `searchPadding` (`16, 0, 16, 8`) | Padding around the search field. The field's own height comes from `searchDecoration`. |
+| `footerMaxHeight` (none) | The tallest the footer may grow. Taller footer content scrolls inside that height instead of taking room from the menu. |
 | `position` (`left`) | Which side the drawer sits on. Flips which edge is rounded **and** which way the default shadow falls. It does **not** reorder your `Row` — do that yourself. |
 
 #### Colors
@@ -612,6 +615,21 @@ DrawerRail(
   headerBuilder: (context, collapsed) =>
       collapsed ? const _Logo() : const _LogoWithName(),
   footerBuilder: (context, collapsed) => DarkModeToggle(collapsed: collapsed),
+);
+```
+
+On short screens the header and footer eat into the menu. Tighten the chrome
+around them and cap the footer from the theme:
+
+```dart
+DrawerRail(
+  // ...
+  theme: const DrawerRailTheme(
+    headerPadding: EdgeInsets.fromLTRB(12, 8, 4, 4),
+    railHeaderPadding: EdgeInsets.symmetric(vertical: 8),
+    searchPadding: EdgeInsets.fromLTRB(12, 0, 12, 4),
+    footerMaxHeight: 160, // taller footer content scrolls
+  ),
 );
 ```
 
