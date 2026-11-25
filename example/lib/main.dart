@@ -1,4 +1,7 @@
 import 'package:drawer_rail/drawer_rail.dart';
+// Flutter 3.50 moved this to package:material_ui; kept while the package
+// supports older Flutter versions.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 
 void main() => runApp(const ExampleApp());
