@@ -82,7 +82,7 @@ Add it to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  drawer_rail: ^0.8.0
+  drawer_rail: ^0.8.1
 ```
 
 Or let pub add it for you:
