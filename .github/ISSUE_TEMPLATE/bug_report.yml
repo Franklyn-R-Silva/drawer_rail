@@ -2,6 +2,7 @@ name: 🐛 Bug report
 description: The drawer looks wrong, behaves wrong, or throws
 title: "[Bug]: "
 labels: ["bug"]
+assignees: ["Franklyn-R-Silva"]
 body:
   - type: markdown
     attributes:
