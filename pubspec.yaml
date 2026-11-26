@@ -13,6 +13,13 @@ topics:
   - ui
   - widget
 
+# pub.dev shows these on the listing and uses the first as the search thumbnail.
+# Only the still ships: the GIF would add 3 MB to every `pub get`, and the
+# README already plays it on the same page.
+screenshots:
+  - description: 'The drawer_rail panel expanded on a wide screen: search field, section labels, the selected item, text and count badges, a group and a footer.'
+    path: screenshots/drawer_rail.png
+
 environment:
   sdk: ^3.5.0
   flutter: ">=3.24.0"
