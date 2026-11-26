@@ -21,8 +21,8 @@ screenshots:
     path: screenshots/drawer_rail.png
 
 environment:
-  sdk: ^3.5.0
-  flutter: ">=3.24.0"
+  sdk: ^3.6.0
+  flutter: ">=3.27.0"
 
 dependencies:
   flutter:

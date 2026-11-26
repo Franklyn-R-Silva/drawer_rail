@@ -64,7 +64,7 @@ Or let pub add it for you:
 flutter pub add drawer_rail
 ```
 
-Requires Dart `^3.5.0` and Flutter `>=3.24.0`. Works on every Flutter target;
+Requires Dart `^3.6.0` and Flutter `>=3.27.0`. Works on every Flutter target;
 the hover behavior needs a pointer, so it simply never fires on touch.
 
 Then import it:

@@ -89,7 +89,7 @@ jobs:
         run: flutter test
 
   min-flutter:
-    name: min Flutter (3.24.0)
+    name: min Flutter (3.27.0)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -97,13 +97,13 @@ jobs:
         with:
           persist-credentials: false
 
-      # pubspec.yaml promises `flutter: >=3.24.0` and nothing verified it: every
+      # pubspec.yaml promises `flutter: >=3.27.0` and nothing verified it: every
       # other job runs on a current SDK, where an API added after the floor
       # compiles fine. The dev dependencies resolve on the floor, so the real
       # suite runs here. Keep this version equal to the pubspec's lower bound.
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
-          flutter-version: 3.24.0
+          flutter-version: 3.27.0
           channel: stable
           cache: true
 
