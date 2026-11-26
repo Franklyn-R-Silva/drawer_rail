@@ -1,11 +1,11 @@
 {
-    "name": "drawer_rail_example",
-    "short_name": "drawer_rail_example",
+    "name": "drawer_rail demo",
+    "short_name": "drawer_rail",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Live demo of drawer_rail, a collapsible, themeable side navigation drawer for Flutter.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
