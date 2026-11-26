@@ -2,28 +2,37 @@
 
 ## Supported versions
 
-The latest published version on [pub.dev](https://pub.dev/packages/drawer_rail)
-receives security fixes.
+Security fixes are applied to the latest published release on
+[pub.dev](https://pub.dev/packages/drawer_rail). Please upgrade to the most
+recent version before reporting an issue.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+| Version | Supported |
+|---------|-----------|
+| Latest release | ✅ |
+| Older releases | ❌ |
 
 ## Reporting a vulnerability
 
-Please **do not** open a public issue for security vulnerabilities.
+`drawer_rail` is a Flutter widget with no runtime dependencies beyond the
+Flutter SDK; it does no networking and touches no files. A vulnerability is
+still possible — in the package, or in this repository's GitHub Actions
+workflows — and if you find one, please report it privately rather than in a
+public issue.
 
-Instead, report it privately using GitHub's
-[**Report a vulnerability**](https://github.com/Franklyn-R-Silva/drawer_rail/security/advisories/new)
-feature (Security → Advisories), or contact the maintainer at
-**INSERT_CONTACT_METHOD**.
+**Preferred:** use GitHub's
+[private vulnerability reporting](https://github.com/Franklyn-R-Silva/drawer_rail/security/advisories/new)
+("Report a vulnerability" under the Security tab).
 
-Please include:
+**Alternative:** email the maintainer at franklyn1998@gmail.com with:
 
-- A description of the vulnerability and its impact.
-- Steps to reproduce or a proof of concept.
-- Any suggested fix, if you have one.
+- a description of the vulnerability and its impact;
+- steps to reproduce, or a proof of concept;
+- the `drawer_rail` and Flutter versions affected.
 
-You can expect an initial response within a few days. Once the issue is
-confirmed and fixed, a new version will be released and credit given to the
-reporter (unless you prefer to stay anonymous).
+## Response expectations
+
+- **Acknowledgement:** within 5 business days.
+- **Assessment and fix timeline:** communicated after triage.
+- **Disclosure:** coordinated — please allow a reasonable window to release a
+  fix before any public disclosure. Reporters are credited in the release
+  notes unless they prefer to stay anonymous.
