@@ -5,6 +5,7 @@
 [![likes](https://img.shields.io/pub/likes/drawer_rail)](https://pub.dev/packages/drawer_rail/score)
 [![CI](https://github.com/Franklyn-R-Silva/drawer_rail/actions/workflows/ci.yaml/badge.svg)](https://github.com/Franklyn-R-Silva/drawer_rail/actions/workflows/ci.yaml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Franklyn-R-Silva/drawer_rail/badge)](https://scorecard.dev/viewer/?uri=github.com/Franklyn-R-Silva/drawer_rail)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/17139/badge)](https://www.bestpractices.dev/projects/17139)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A collapsible, themeable **side navigation drawer** for Flutter.
@@ -81,7 +82,7 @@ Add it to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  drawer_rail: ^0.8.0
+  drawer_rail: ^0.8.1
 ```
 
 Or let pub add it for you:

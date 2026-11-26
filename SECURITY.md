@@ -23,7 +23,7 @@ public issue.
 [private vulnerability reporting](https://github.com/Franklyn-R-Silva/drawer_rail/security/advisories/new)
 ("Report a vulnerability" under the Security tab).
 
-**Alternative:** email the maintainer at franklyn1998@gmail.com with:
+**Alternative:** email the maintainer at franklyn.dev.mobile@gmail.com with:
 
 - a description of the vulnerability and its impact;
 - steps to reproduce, or a proof of concept;

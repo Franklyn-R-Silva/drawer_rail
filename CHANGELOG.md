@@ -2,6 +2,20 @@
 
 <!-- Add upcoming changes under a new "## Unreleased" heading. -->
 
+## 0.8.1
+
+No API changes: this release brings the new README and docs to pub.dev.
+
+- **Requires Flutter 3.32.** The package claimed `flutter: ">=3.24.0"`, but
+  earlier versions failed to compile (3.24–3.26) or misbehaved with
+  hover-opened rail flyouts (3.27–3.31). The floor is now
+  `flutter: ">=3.32.0"`, and CI tests on exactly that version.
+- **[Live demo](https://franklyn-r-silva.github.io/drawer_rail/):** the
+  example app, running in your browser.
+- Releases are now published to pub.dev by GitHub Actions.
+- New contributor docs: a quick-start in `CONTRIBUTING.md`, issue forms and a
+  shorter PR template.
+
 ## 0.8.0
 
 - **New: size the chrome around the header, search and footer.** On short
