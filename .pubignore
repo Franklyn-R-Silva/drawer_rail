@@ -23,6 +23,10 @@ pubspec.lock
 screenshots/*
 !screenshots/drawer_rail.png
 
+# An index of the GitHub docs for AI assistants; the package already ships the
+# README it points to.
+llms.txt
+
 # Example: keep only the source (lib/, test/, pubspec, README); drop generated
 # platform runners and build output.
 example/.dart_tool/

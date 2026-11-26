@@ -1,0 +1,27 @@
+# drawer_rail
+
+> A Flutter widget for side navigation: one `DrawerRail` that is a full-width panel (search, section labels, a selected pill, text/count badges, inline-expandable groups) and collapses into a narrow icon rail where groups open as flyout menus. State lives in a plain `ChangeNotifier`, `DrawerRailController`; every size, color, text style, icon, cursor and animation is on `DrawerRailTheme`, with `ColorScheme` fallbacks. It can open and close on hover (web/desktop) without overwriting the persisted collapsed state. No runtime dependencies beyond Flutter. Flutter 3.27 or later.
+
+Install with `flutter pub add drawer_rail` and import `package:drawer_rail/drawer_rail.dart`. Key facts:
+
+- Place `DrawerRail(controller: ..., entries: [...])` in a `Row` beside the content, not in `Scaffold.drawer`: it renders at a fixed width and animates it.
+- Entries are `DrawerSection` (a header; a divider in the rail), `DrawerLink` (`id`, `icon`, `label`, `onTap`, optional `badge`, `selectedIcon`, `danger`) and `DrawerGroup` (a link list; inline in the panel, a flyout in the rail).
+- `controller.collapsed` is the pinned state to persist; `controller.railCollapsed` is what is on screen, which hover can change temporarily.
+- `DrawerRailTheme.hoverAdaptive()` makes the rail open on hover and close on exit; `selectOnTap: false` plus `controller.select(id)` lets a router drive the selection.
+- `DrawerRailLabels` localizes every built-in string; `DrawerRailController(accordion: true)` keeps one group open at a time.
+
+## Docs
+
+- [README](https://raw.githubusercontent.com/Franklyn-R-Silva/drawer_rail/main/README.md): The tour: quick start, entries, search, controller, every theme field, hover rules, header/footer, localization, FAQ
+- [Example](https://raw.githubusercontent.com/Franklyn-R-Silva/drawer_rail/main/example/lib/main.dart): The demo app: header, dark-mode footer, badges, groups, hover switches, a custom right-side theme
+- [Live demo](https://franklyn-r-silva.github.io/drawer_rail/): The example app built for the web
+
+## Package
+
+- [pub.dev](https://pub.dev/packages/drawer_rail): Versions, install instructions, score
+- [API reference](https://pub.dev/documentation/drawer_rail/latest/): Generated dartdoc for every public class and field
+
+## Optional
+
+- [Changelog](https://raw.githubusercontent.com/Franklyn-R-Silva/drawer_rail/main/CHANGELOG.md): Every release, with the reason behind each behavior change
+- [Contributing](https://raw.githubusercontent.com/Franklyn-R-Silva/drawer_rail/main/CONTRIBUTING.md): Setup, tests, code layout, what CI checks
