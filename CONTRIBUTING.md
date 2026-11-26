@@ -160,12 +160,13 @@ both up to date. A tag can be moved to point at other code; a SHA cannot.
    ```
 
    The `Release` workflow re-runs analyze and the tests, refuses a tag that
-   does not match `pubspec.yaml`, and creates the GitHub Release from the
-   changelog section plus GitHub's generated notes, grouped by PR label
-   (`.github/release.yml`). Label PRs as they merge and the notes sort
-   themselves.
-3. Publishing to pub.dev is not automated: run `flutter pub publish` from a
-   clean checkout of the tag.
+   does not match `pubspec.yaml`, publishes to pub.dev (automated publishing
+   through the `pub.dev` environment, no secret involved), and then creates
+   the GitHub Release from the changelog section plus GitHub's generated
+   notes, grouped by PR label (`.github/release.yml`). Label PRs as they
+   merge and the notes sort themselves.
+3. Do not run `flutter pub publish` by hand: the tag does it, and a version
+   already on pub.dev makes the workflow fail.
 
 ### Dependency updates
 
