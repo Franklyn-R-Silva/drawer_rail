@@ -21,7 +21,7 @@ problems [privately](SECURITY.md), not in an issue.
 
 ## Your first contribution in 5 minutes
 
-You need Git and **Flutter 3.27 or newer** — the oldest version
+You need Git and **Flutter 3.32 or newer** — the oldest version
 `pubspec.yaml` supports, and CI checks it. Any current stable works.
 
 ```sh
@@ -135,7 +135,7 @@ Every PR runs these, and a PR is merged only when they are green:
 | `check` | format, `flutter analyze --fatal-infos`, `flutter pub publish --dry-run` |
 | `test (stable)` | the suite and the example's smoke test on stable Flutter |
 | `test (beta)` | the same on the next Flutter |
-| `min Flutter (3.27.0)` | analyze and the suite on the oldest Flutter `pubspec.yaml` claims |
+| `min Flutter (3.32.0)` | analyze and the suite on the oldest Flutter `pubspec.yaml` claims |
 | `pana` | pub.dev's scorer; fails on any pub point below the maximum (160/160) |
 | `build demo` | builds the example for the web, as the live demo is built |
 | `dependency review` | fails if the PR adds a package or action with a known vulnerability |

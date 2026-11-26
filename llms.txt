@@ -1,6 +1,6 @@
 # drawer_rail
 
-> A Flutter widget for side navigation: one `DrawerRail` that is a full-width panel (search, section labels, a selected pill, text/count badges, inline-expandable groups) and collapses into a narrow icon rail where groups open as flyout menus. State lives in a plain `ChangeNotifier`, `DrawerRailController`; every size, color, text style, icon, cursor and animation is on `DrawerRailTheme`, with `ColorScheme` fallbacks. It can open and close on hover (web/desktop) without overwriting the persisted collapsed state. No runtime dependencies beyond Flutter. Flutter 3.27 or later.
+> A Flutter widget for side navigation: one `DrawerRail` that is a full-width panel (search, section labels, a selected pill, text/count badges, inline-expandable groups) and collapses into a narrow icon rail where groups open as flyout menus. State lives in a plain `ChangeNotifier`, `DrawerRailController`; every size, color, text style, icon, cursor and animation is on `DrawerRailTheme`, with `ColorScheme` fallbacks. It can open and close on hover (web/desktop) without overwriting the persisted collapsed state. No runtime dependencies beyond Flutter. Flutter 3.32 or later.
 
 Install with `flutter pub add drawer_rail` and import `package:drawer_rail/drawer_rail.dart`. Key facts:
 

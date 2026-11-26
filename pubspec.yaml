@@ -21,8 +21,11 @@ screenshots:
     path: screenshots/drawer_rail.png
 
 environment:
+  # Flutter 3.32 is the oldest release the whole test suite passes on (CI's
+  # min Flutter job checks it). The Dart bound stays lower on purpose: it sets
+  # the language version, and moving it past 3.6 changes `dart format` output.
   sdk: ^3.6.0
-  flutter: ">=3.27.0"
+  flutter: ">=3.32.0"
 
 dependencies:
   flutter:
