@@ -1,0 +1,17 @@
+# Groups the notes GitHub generates for a release (`generate_release_notes` in
+# workflows/release.yaml) by the labels on the merged PRs. A PR lands in the
+# first category whose label it carries, so the order below is the priority.
+changelog:
+  categories:
+    - title: Breaking changes
+      labels: ["breaking change"]
+    - title: New features
+      labels: [enhancement]
+    - title: Bug fixes
+      labels: [bug]
+    - title: Documentation
+      labels: [documentation]
+    - title: Dependencies
+      labels: [dependencies]
+    - title: Other changes
+      labels: ["*"]
