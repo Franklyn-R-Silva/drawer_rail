@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Question or discussion
-    url: https://github.com/Franklyn-R-Silva/drawer_rail/discussions
-    about: Ask questions and discuss ideas with the community.
+  - name: 💬 Ask a question
+    url: https://github.com/Franklyn-R-Silva/drawer_rail/discussions/categories/q-a
+    about: How do I…? Is this a bug? Which theme field do I need? Ask here.
+  - name: 🙌 Show how you use it
+    url: https://github.com/Franklyn-R-Silva/drawer_rail/discussions/categories/show-and-tell
+    about: A screenshot of your drawer, your theme or your setup. It helps the next person.
