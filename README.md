@@ -1,10 +1,19 @@
 # drawer_rail
 
 [![pub package](https://img.shields.io/pub/v/drawer_rail.svg)](https://pub.dev/packages/drawer_rail)
+[![pub points](https://img.shields.io/pub/points/drawer_rail?label=pub%20points&color=brightgreen)](https://pub.dev/packages/drawer_rail/score)
+[![likes](https://img.shields.io/pub/likes/drawer_rail)](https://pub.dev/packages/drawer_rail/score)
 [![CI](https://github.com/Franklyn-R-Silva/drawer_rail/actions/workflows/ci.yaml/badge.svg)](https://github.com/Franklyn-R-Silva/drawer_rail/actions/workflows/ci.yaml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Franklyn-R-Silva/drawer_rail/badge)](https://scorecard.dev/viewer/?uri=github.com/Franklyn-R-Silva/drawer_rail)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A collapsible, themeable **side navigation drawer** for Flutter.
+
+### [▶ Try the live demo](https://franklyn-r-silva.github.io/drawer_rail/)
+
+The [example app](example/lib/main.dart), running in your browser: collapse it
+to the rail, hover it open, search, open a group as a flyout, and switch to a
+fully custom right-side theme.
 
 <p align="center">
   <img
@@ -49,6 +58,23 @@ State lives in a plain `ChangeNotifier` (`DrawerRailController`), so there is
 - 🧱 Custom header and footer slots (avatar, dark-mode toggle, sign out, …).
 - 🧪 No runtime dependencies beyond Flutter.
 
+## drawer_rail or Flutter's own widgets?
+
+Flutter ships [`NavigationRail`](https://api.flutter.dev/flutter/material/NavigationRail-class.html)
+and [`NavigationDrawer`](https://api.flutter.dev/flutter/material/NavigationDrawer-class.html),
+with no extra dependency. Reach for drawer_rail when you need what they leave
+to you:
+
+| You need | Use |
+| -------- | --- |
+| A narrow strip of destinations, optionally `extended` to show labels | `NavigationRail` |
+| A modal drawer that slides over the screen (`Scaffold.drawer`), common on phones | `NavigationDrawer` |
+| **One** widget that is a full panel *and* collapses to an icon rail, with search, sections, nested groups (flyouts in the rail), badges and hover-to-open | `drawer_rail` |
+
+Flutter's two select a destination by `selectedIndex`; drawer_rail selects by
+a string `id`, which is easier to map from a route. drawer_rail is not meant
+for the `Scaffold.drawer` slot — see the note under [Quick start](#quick-start).
+
 ## Installation
 
 Add it to your `pubspec.yaml`:
@@ -64,7 +90,7 @@ Or let pub add it for you:
 flutter pub add drawer_rail
 ```
 
-Requires Dart `^3.5.0` and Flutter `>=3.24.0`. Works on every Flutter target;
+Requires Flutter `>=3.32.0`. Works on every Flutter target;
 the hover behavior needs a pointer, so it simply never fires on touch.
 
 Then import it:
@@ -662,7 +688,9 @@ costs nothing and they can be asserted on directly in tests.
 
 ## Example
 
-A complete, runnable example lives in [`example/`](example/lib/main.dart): a
+Try it [in your browser](https://franklyn-r-silva.github.io/drawer_rail/), or
+run it yourself. A complete, runnable example lives in
+[`example/`](example/lib/main.dart): a
 header logo, a dark-mode footer toggle, badges, a group, and switches that flip
 **Open on hover** and **Close on exit** live, so you can feel the difference
 between click-driven and pointer-driven rather than guess at it. There is also a
@@ -673,14 +701,35 @@ cd example
 flutter run -d chrome   # hover behavior needs a pointer device
 ```
 
+## FAQ
+
+**Does it work on phones and tablets?** Yes. Every item stays tappable in every
+mode; the hover behavior simply never fires without a pointer.
+
+**Can it go in `Scaffold.drawer`?** No. It renders at a fixed width and animates
+it, so place it in a `Row` beside your content. For a modal drawer on a phone,
+use Flutter's `NavigationDrawer` there.
+
+**My router decides what is selected.** Pass `selectOnTap: false` and call
+`controller.select(id)` as the location changes — see
+[Selection that follows the route](#selection-that-follows-the-route).
+
+**How do I remember whether it was collapsed?** Listen to the controller and
+save `controller.collapsed` — see [Persisting state](#persisting-state). Hover
+never writes it.
+
+**Can it sit on the right?** `DrawerRailTheme(position: DrawerRailPosition.right)`;
+reorder your `Row` to match.
+
 ## Contributing
 
-Contributions are welcome from everyone! Fork the repo, create a branch, and
-open a pull request. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first and
-follow the [Code of Conduct](CODE_OF_CONDUCT.md).
-
-Good first steps: open an issue for bugs or ideas, improve the docs, or add
-tests.
+Contributions are welcome from everyone, and none has to be perfect. The
+[contributing guide](CONTRIBUTING.md) gets you from clone to a running example
+and a green test suite in five minutes; issues labelled
+[`good first issue`](https://github.com/Franklyn-R-Silva/drawer_rail/labels/good%20first%20issue)
+are a good place to start. Questions go to
+[Discussions](https://github.com/Franklyn-R-Silva/drawer_rail/discussions/categories/q-a).
+Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

@@ -17,9 +17,15 @@ pubspec.lock
 # OS
 .DS_Store
 
-# Media — referenced in the README via absolute raw GitHub URLs, so it does
-# not need to ship inside the package archive.
-screenshots/
+# Media — the README uses absolute raw GitHub URLs for these, so only the
+# image listed under `screenshots:` in pubspec.yaml ships: pub.dev reads it from
+# the archive.
+screenshots/*
+!screenshots/drawer_rail.png
+
+# An index of the GitHub docs for AI assistants; the package already ships the
+# README it points to.
+llms.txt
 
 # Example: keep only the source (lib/, test/, pubspec, README); drop generated
 # platform runners and build output.

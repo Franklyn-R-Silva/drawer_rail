@@ -1,0 +1,44 @@
+name: 🐛 Bug report
+description: The drawer looks wrong, behaves wrong, or throws
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Only the first box is required — a short report
+        is better than none, and follow-up questions are fine.
+        Not sure it is a bug? Ask in [Discussions](https://github.com/Franklyn-R-Silva/drawer_rail/discussions/categories/q-a).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what the drawer did, and what you expected instead. A screenshot or screen recording helps a lot for anything visual.
+      placeholder: I collapse the drawer, tap a group in the rail, and ...
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: Minimal sample
+      description: The smallest `DrawerRail(...)` setup that shows it — the entries, the theme and the controller you pass. This is what makes a fix fast.
+      render: dart
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: "The `drawer_rail` version from `pubspec.lock` and `flutter --version`, if you have them handy."
+      placeholder: "drawer_rail 0.8.0, Flutter 3.x.y (stable)"
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Hover behaviour only exists with a mouse or trackpad, so this matters.
+      multiple: true
+      options:
+        - Web
+        - Android
+        - iOS
+        - Windows
+        - macOS
+        - Linux

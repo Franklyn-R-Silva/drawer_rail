@@ -13,9 +13,19 @@ topics:
   - ui
   - widget
 
+# pub.dev shows these on the listing and uses the first as the search thumbnail.
+# Only the still ships: the GIF would add 3 MB to every `pub get`, and the
+# README already plays it on the same page.
+screenshots:
+  - description: 'The drawer_rail panel expanded on a wide screen: search field, section labels, the selected item, text and count badges, a group and a footer.'
+    path: screenshots/drawer_rail.png
+
 environment:
-  sdk: ^3.5.0
-  flutter: ">=3.24.0"
+  # Flutter 3.32 is the oldest release the whole test suite passes on (CI's
+  # min Flutter job checks it). The Dart bound stays lower on purpose: it sets
+  # the language version, and moving it past 3.6 changes `dart format` output.
+  sdk: ^3.6.0
+  flutter: ">=3.32.0"
 
 dependencies:
   flutter:
